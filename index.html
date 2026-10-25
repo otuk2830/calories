@@ -313,6 +313,10 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .wrow2 .pill { background: var(--ink); color: var(--bg); padding: 0 18px; }
 .grow { flex: 1; min-width: 0; }
 .logbtn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); font-weight: 800; box-shadow: var(--shadow); }
+.toggle { display: flex; gap: 12px; align-items: flex-start; background: var(--chip); border-radius: 14px; padding: 12px 14px; cursor: pointer; }
+.toggle input { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--ink); flex: none; }
+.toggle b { display: block; font-size: 15px; }
+.toggle small { color: var(--muted); font-size: 13px; }
 /* Scanner */
 .scanner { position: fixed; inset: 0; z-index: 40; background: #000; color: #fff; display: flex; flex-direction: column; }
 .scanner video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -456,9 +460,11 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
   </section>
   <section class="panel">
     <h3>Weight</h3>
+    <div class="chips" id="wRange"></div>
     <div class="wrow2"><span class="inp"><input id="wIn" class="num" type="number" inputmode="decimal" min="20" max="400" step="0.1" placeholder="Today's weight"><span>kg</span></span><button class="pill" id="wSave" type="button">Save</button></div>
     <div class="chart" id="wChart"></div>
     <p id="wSum"></p>
+    <p class="status ok" id="wNote" hidden></p>
     <div class="rlist" id="wList"></div>
   </section>
 </main>
@@ -731,7 +737,9 @@ window.addEventListener("load", () => { loadUSDA(); if ($("q").value) showResult
 const METRIC = ["g", "kg", "oz", "lb"], VOLUME = ["ml", "l", "tsp", "tbsp", "cup"];
 const LABEL = { g: "g", kg: "kg", oz: "oz", lb: "lb", ml: "ml", l: "litre", tsp: "tsp", tbsp: "tbsp", cup: "cup" };
 const RI = 2000;
-const APP_VERSION = "7";
+const APP_VERSION = "10";
+let usage = (() => { try { return JSON.parse(localStorage.getItem("rcc.usage")) || {}; } catch { return {}; } })();
+function bumpUsage(f) { if (!f || f.src === "recipe") return; usage[f.name] = (usage[f.name] || 0) + 1; try { localStorage.setItem("rcc.usage", JSON.stringify(usage)); } catch {} }
 let addTarget = { kind: "none" };
 const ICON_X = `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>`;
 
@@ -772,7 +780,7 @@ function save() {
 }
 function pick(f) { const o = { name: f.name, kcal: f.kcal, d: f.d || 0, m: f.m || [], p: num(f.p), c: num(f.c), f: num(f.f), fb: num(f.fb) }; if (f.onlyM) o.onlyM = true; return o; }
 
-function unitsFor(f) { if (f.onlyM) return (f.m || []).map((_, i) => "m" + i); return ["g", ...(f.m || []).map((_, i) => "m" + i), "kg", "oz", "lb", ...(f.d ? VOLUME : [])]; }
+function unitsFor(f) { if (f.onlyM) return f.rid ? ["m0", "g"] : (f.m || []).map((_, i) => "m" + i); return ["g", ...(f.m || []).map((_, i) => "m" + i), "kg", "oz", "lb", ...(f.d ? VOLUME : [])]; }
 function grams(it) {
   const q = +it.qty || 0, d = it.d || 1, u = it.unit || "g";
   if (u[0] === "m" && u.length <= 3 && u !== "ml") return q * ((it.m || [])[+u.slice(1)]?.[1] || 0);
@@ -787,7 +795,7 @@ function unitName(f, u, q) {
   if (u[0] === "m" && u !== "ml") { const lab = (f.m || [])[+u.slice(1)]?.[0] || "piece"; return +q === 1 || /,|\s/.test(lab) ? lab : lab + "s"; }
   return LABEL[u] || u;
 }
-function chipName(f, u) { if (f.onlyM) return (f.m || [])[+u.slice(1)]?.[0] || "portion"; return u[0] === "m" && u !== "ml" ? `${(f.m || [])[+u.slice(1)]?.[0]} (${fmt((f.m || [])[+u.slice(1)]?.[1])} g)` : LABEL[u]; }
+function chipName(f, u) { if (f.onlyM && u[0] === "m" && u !== "ml") return (f.m || [])[+u.slice(1)]?.[0] || "portion"; return u[0] === "m" && u !== "ml" ? `${(f.m || [])[+u.slice(1)]?.[0]} (${fmt((f.m || [])[+u.slice(1)]?.[1])} g)` : LABEL[u]; }
 
 // ---------- Maths for macros
 const macro = (it, k) => it[k] == null ? null : grams(it) * it[k] / 100;
@@ -876,6 +884,7 @@ function search(q) {
   for (const [pool, bonus] of pools) for (const f of pool) {
     const n = norm(f.name); if (!words.every(w => n.includes(w))) continue;
     let s = bonus + n.length / 40;
+    const u = usage[f.name] || 0; if (u) s -= 25 + Math.min(u, 30);
     const first = n.split(/[\s,]+/)[0];
     if (first.startsWith(words[0])) s -= 6;
     if (f.src === "usda" && /\braw\b/.test(n)) s -= 1;
@@ -918,36 +927,54 @@ function amountSheet(food, editIndex, note) {
   let unit = editing ? food.unit : defaultUnit(food);
   const units = unitsFor(food);
   if (!units.includes(unit)) unit = "g";
-  const facts = food.onlyM ? `${fmt(food.kcal * food.m[0][1] / 100)} kcal per ${food.m[0][0]}` : food.src === "recipe" ? `${fmt(food.kcal)} kcal per 100 g cooked · 1 portion ≈ ${fmt(food.m[0][1])} g` : [`${fmt(food.kcal)} kcal per 100 g`, ...(food.m || []).slice(0, 1).map(m => `1 ${m[0]} ≈ ${fmt(m[1])} g`)].join(" · ");
+  const pn = food.portions ? ` · recipe makes ${fmt(food.portions, 1)} portion${food.portions === 1 ? "" : "s"}` : "";
+  const facts = food.onlyM ? `${fmt(food.kcal * food.m[0][1] / 100)} kcal per ${food.m[0][0]}${pn}` : food.src === "recipe" ? `${fmt(food.kcal * food.m[0][1] / 100)} kcal per portion${pn} · 1 portion ≈ ${fmt(food.m[0][1])} g cooked` : [`${fmt(food.kcal)} kcal per 100 g`, ...(food.m || []).slice(0, 1).map(m => `1 ${m[0]} ≈ ${fmt(m[1])} g`)].join(" · ");
   openSheet(`
     <div class="sh-head"><div><h3>${esc(food.name)}</h3><p class="num">${esc(facts)}</p>${note ? `<p>${esc(note)}</p>` : ""}</div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
     <label class="qtybig"><input id="aq" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="0" value="${editing ? esc(food.qty) : food.src === "recipe" ? "1" : ""}" aria-label="Amount"><span id="aunit"></span></label>
     <div class="chips" id="achips">${units.map(u => `<button type="button" data-u="${u}" aria-pressed="${u === unit}">${esc(chipName(food, u))}</button>`).join("")}</div>
+    ${food.rid && food.onlyM ? `<div id="cookBox" class="form" hidden>
+      <label class="fld">Whole cooked dish<span class="inp"><input id="acook" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="weigh it once"><span>g</span></span></label>
+      <p class="prose">To log by grams, the app needs the weight of all the cooked food (without the pot). It's saved in the recipe, so next time you can go straight to grams.</p>
+    </div>` : ""}
     <div class="preview"><span id="agrams"></span><b class="num" id="akcal">0 kcal</b></div>
     <button class="cta" id="aok" type="button">${editing ? "Save" : diaryMode ? `Add to ${mealName(addTarget.meal)}` : "Add to recipe"}</button>
     ${editing ? `<button class="ghost" id="adel" type="button">${diaryMode ? "Remove from diary" : "Remove from recipe"}</button>` : ""}`);
+  const needCook = !!(food.rid && food.onlyM), baseFood = food;
   const upd = () => {
+    if (needCook) {
+      const cook = +$("acook").value || 0, R = recipes.find(r => r.id === baseFood.rid);
+      $("cookBox").hidden = unit !== "g";
+      food = unit === "g" && cook > 0 && R ? { ...recipeFood({ ...R, cooked: cook }), rid: R.id } : baseFood;
+      if (unit === "g" && !(cook > 0)) {
+        $("aunit").textContent = "g"; $("akcal").textContent = "– kcal"; $("agrams").textContent = "Enter the dish weight first"; $("aok").disabled = true; return;
+      }
+    }
     const it = { ...food, qty: $("aq").value, unit };
     $("aunit").textContent = unitName(food, unit, $("aq").value || 0);
     $("akcal").textContent = `${fmt(kcalOf(it))} kcal`;
     $("agrams").textContent = unit !== "g" && !food.onlyM && +$("aq").value ? `≈ ${fmt(grams(it))} g` : "";
     $("aok").disabled = !(+$("aq").value > 0);
   };
-  $("achips").onclick = e => { const b = e.target.closest("[data-u]"); if (!b) return; unit = b.dataset.u; [...$("achips").children].forEach(c => c.setAttribute("aria-pressed", c === b)); upd(); };
+  $("achips").onclick = e => { const b = e.target.closest("[data-u]"); if (!b) return; const prevU = unit; unit = b.dataset.u; [...$("achips").children].forEach(c => c.setAttribute("aria-pressed", c === b));
+    if (food.src === "recipe" && prevU !== unit && (unit === "g" || prevU === "g")) $("aq").value = unit === "g" ? "" : "1";
+    upd(); if (unit === "g") setTimeout(() => ($("acook") && !$("cookBox").hidden && !$("acook").value ? $("acook") : $("aq")).focus(), 30); };
   $("aq").addEventListener("input", upd);
+  $("acook")?.addEventListener("input", upd);
   $("aq").addEventListener("keydown", e => { if (e.key === "Enter" && !$("aok").disabled) $("aok").click(); });
   $("aok").onclick = () => {
+    if (needCook && unit === "g") { const R = recipes.find(r => r.id === baseFood.rid), cook = +$("acook").value; if (R && cook > 0) { R.cooked = String(cook); save(); } }
     const it = { ...pick(food), qty: $("aq").value, unit };
     if (diaryMode) {
       const meal = addTarget.meal;
       if (editing) { const es = entriesOf(curDay); es[editIndex] = { ...es[editIndex], ...it }; saveDiary(); }
-      else { logEntry(it, meal); rememberRecent(food); saveDiary(); }
+      else { logEntry(it, meal); rememberRecent(food); bumpUsage(food); saveDiary(); }
       closeSheet();
       if (tab === "today" && !$("today").hidden) renderToday();
       else notice(`Added to ${mealName(meal)} in today's diary.`);
       return;
     }
-    if (editing) recipe.items[editIndex] = it; else recipe.items.push(it);
+    if (editing) recipe.items[editIndex] = it; else { recipe.items.push(it); bumpUsage(food); }
     touch(); save(); closeSheet(); render();
   };
   if (editing) $("adel").onclick = e => {
@@ -1369,7 +1396,7 @@ let pickRes = [];
 function recipeFood(r) {
   const T = totalsOf(r), p = Math.max(1, +r.portions || 1), cooked = +r.cooked || 0, W = cooked || T.weight || 1;
   const per = v => v / W * 100;
-  return { name: r.name || "Recipe", kcal: per(T.kcal), p: per(T.p), c: per(T.c), f: per(T.f), fb: per(T.fb), d: 0, m: [["portion", W / p]], onlyM: !cooked, src: "recipe" };
+  return { name: r.name || "Recipe", kcal: per(T.kcal), p: per(T.p), c: per(T.c), f: per(T.f), fb: per(T.fb), d: 0, m: [["portion", W / p]], onlyM: !cooked, src: "recipe", portions: p, rid: r.id };
 }
 function foodPicker(meal) {
   addTarget = { kind: "diary", meal };
@@ -1387,9 +1414,9 @@ function foodPicker(meal) {
     if (!q) {
       $("pres").innerHTML = (withItems.length ? `<h4 class="ph">My recipes</h4><div class="rlist">${withItems.map(r => {
           const T = totalsOf(r), p = Math.max(1, +r.portions || 1);
-          return `<div class="rrow"><button class="open" type="button" data-rec="${r.id}"><b>${esc(r.name || "Untitled recipe")}</b><small class="num">${fmt(T.kcal / p)} kcal per portion${+r.cooked ? " · weigh your plate" : ""}</small></button></div>`;
+          return `<div class="rrow"><button class="open" type="button" data-rec="${r.id}"><b>${esc(r.name || "Untitled recipe")}</b><small class="num">${fmt(T.kcal / p)} kcal per portion · recipe makes ${fmt(p, 1)} portion${p === 1 ? "" : "s"}${+r.cooked ? ` · ${fmt(+r.cooked)} g cooked` : ""}</small></button></div>`;
         }).join("")}</div>` : "") +
-        (recentFoods.length ? `<h4 class="ph">Recent</h4><div class="rlist">${recentFoods.map((f, i) => `<div class="rrow"><button class="open" type="button" data-recent="${i}"><b>${esc(f.name)}</b><small class="num">${fmt(f.kcal)} kcal per 100 g</small></button></div>`).join("")}</div>` : "") +
+        (recentFoods.length ? `<h4 class="ph">Your foods</h4><div class="rlist">${recentFoods.map((f, i) => ({ f, i, u: usage[f.name] || 0 })).sort((a, b) => b.u - a.u || a.i - b.i).map(({ f, i, u }) => `<div class="rrow"><button class="open" type="button" data-recent="${i}"><b>${esc(f.name)}</b><small class="num">${fmt(f.kcal)} kcal per 100 g${u > 1 ? ` · used ${u} times` : ""}</small></button></div>`).join("")}</div>` : "") +
         (!withItems.length && !recentFoods.length ? `<p class="prose">Search for a food, scan a barcode, or save a recipe to log a portion of it here.</p>` : "") +
         `<div class="links"><button class="pill" type="button" id="plabel">Add from a label</button></div>`;
       return;
@@ -1404,7 +1431,7 @@ function foodPicker(meal) {
   $("pres").onclick = e => {
     const r = e.target.closest("[data-pr]"), rec = e.target.closest("[data-rec]"), rc = e.target.closest("[data-recent]");
     if (r) amountSheet(pickRes[+r.dataset.pr]);
-    if (rec) { const R = recipes.find(x => x.id === rec.dataset.rec); amountSheet(recipeFood(R), undefined, +R.cooked ? "Weigh your plate and enter grams for the best accuracy, or log portions." : "Tip: add the cooked dish weight in the recipe to log by plate weight."); }
+    if (rec) { const R = recipes.find(x => x.id === rec.dataset.rec); amountSheet(recipeFood(R), undefined, +R.cooked ? "Weigh your plate and enter grams for the best accuracy, or log portions." : "Log by portion, or tap g to log by the weight on your plate."); }
     if (rc) amountSheet(recentFoods[+rc.dataset.recent]);
     if (e.target.closest("#ponline")) onlineSheet($("pq").value.trim());
     if (e.target.closest("#plabel")) productSheet({ name: $("pq")?.value.trim() || "" });
@@ -1413,6 +1440,15 @@ function foodPicker(meal) {
 }
 
 // ---------- Goals
+function goalFrom(pr) {
+  const a = +pr.age, h = +pr.height, w = +pr.weight;
+  if (!(a >= 16 && h >= 120 && w >= 30)) return null;
+  const bmr = 10 * w + 6.25 * h - 5 * a + (pr.sex === "male" ? 5 : -161);
+  const keep = bmr * +(pr.act || 1.375), floor = pr.sex === "male" ? 1500 : 1200;
+  let target = keep + +(pr.aim || 0), floored = false;
+  if (target < floor) { target = floor; floored = true; }
+  return { kcal: Math.round(target / 10) * 10, keep, floor, floored };
+}
 function goalsSheet() {
   const g = goals || { kcal: "", pp: 25, cp: 45, fp: 30 };
   openSheet(`
@@ -1425,7 +1461,9 @@ function goalsSheet() {
       <label class="fld">Fat<span class="inp"><input id="gf" class="num" type="number" inputmode="numeric" min="0" max="100" value="${g.fp ?? 30}"><span>%</span></span></label>
     </div></div>
     <p class="status num" id="gmsg"></p>
+    ${profile?.age ? `<label class="toggle"><input type="checkbox" id="gauto" ${g.auto ? "checked" : ""}><span><b>Update automatically with my weight</b><small>When you log a new weight, the goal is worked out again from your details.</small></span></label>` : ""}
     <button class="cta" id="gsave" type="button">Save goals</button>
+    ${goals ? `<button class="ghost" id="greset" type="button">Remove calorie goal</button>` : ""}
     <button class="secondary" id="gbackup" type="button">Backup, sharing &amp; updates</button>`);
   const upd = () => {
     const k = +$("gk").value || 0, pp = +$("gp").value || 0, cp = +$("gc").value || 0, fp = +$("gf").value || 0, sum = pp + cp + fp;
@@ -1438,8 +1476,13 @@ function goalsSheet() {
   ["gk", "gp", "gc", "gf"].forEach(id => $(id).addEventListener("input", upd));
   $("gcalc").onclick = calcSheet;
   $("gbackup").onclick = menuSheet;
+  if ($("greset")) $("greset").onclick = e => {
+    if (!e.target.dataset.armed) { e.target.dataset.armed = 1; e.target.textContent = "Tap again to remove the goal"; return; }
+    goals = null; try { localStorage.removeItem("rcc.goals"); } catch {}
+    closeSheet(); if (tab === "today") renderToday(); if (tab === "progress") renderProgress();
+  };
   $("gsave").onclick = () => {
-    goals = { kcal: Math.round(+$("gk").value), pp: +$("gp").value, cp: +$("gc").value, fp: +$("gf").value };
+    goals = { kcal: Math.round(+$("gk").value), pp: +$("gp").value, cp: +$("gc").value, fp: +$("gf").value, auto: !!$("gauto")?.checked };
     store.set("rcc.goals", goals); closeSheet(); if (tab === "today") renderToday(); if (tab === "progress") renderProgress();
   };
   upd();
@@ -1470,11 +1513,8 @@ function calcSheet() {
     pr.age = $("cage").value; pr.height = $("cht").value; pr.weight = $("cwt").value;
     const a = +pr.age, h = +pr.height, w = +pr.weight;
     if (!(a >= 16 && h >= 120 && w >= 30)) { $("cout").innerHTML = `<p class="prose">Fill in age, height and weight to see your number.</p>`; $("cuse").disabled = true; return; }
-    const bmr = 10 * w + 6.25 * h - 5 * a + (pr.sex === "male" ? 5 : -161);
-    const keep = bmr * +pr.act, floor = pr.sex === "male" ? 1500 : 1200;
-    let target = keep + +pr.aim, floored = false;
-    if (target < floor) { target = floor; floored = true; }
-    result = Math.round(target / 10) * 10;
+    const G = goalFrom(pr), keep = G.keep, floor = G.floor, floored = G.floored;
+    result = G.kcal;
     $("cout").innerHTML = `<div class="big num">${fmt(result)}<span>kcal a day</span></div>
       <p class="prose">To keep your weight: about ${fmt(Math.round(keep / 10) * 10)} kcal a day.${floored ? ` The suggestion is held at ${fmt(floor)} kcal, a common minimum without medical supervision.` : ""} Everyone's body is different, so check your weight trend after 2–3 weeks and adjust.</p>`;
     $("cuse").disabled = false;
@@ -1482,14 +1522,16 @@ function calcSheet() {
   ["cage", "cht", "cwt"].forEach(id => $(id).addEventListener("input", upd));
   $("cuse").onclick = () => {
     profile = { sex: pr.sex, age: pr.age, height: pr.height, weight: pr.weight, act: pr.act, aim: pr.aim }; store.set("rcc.profile", profile);
-    goals = { ...(goals || { pp: 25, cp: 45, fp: 30 }), kcal: result }; store.set("rcc.goals", goals);
+    goals = { ...(goals || { pp: 25, cp: 45, fp: 30 }), kcal: result, auto: true }; store.set("rcc.goals", goals);
     goalsSheet();
   };
   upd();
 }
 
 // ---------- Progress
+let wrange = store.get("rcc.wrange", "30");
 function renderProgress() {
+  $("wNote").hidden = true;
   const t = keyOf(new Date()), goal = goals?.kcal || 0;
   // week chart
   const days = [...Array(7)].map((_, i) => addDays(t, i - 6));
@@ -1515,7 +1557,9 @@ function renderProgress() {
   } else $("weekAvg").textContent = "Nothing logged this week yet. Days you log appear here.";
   // weight
   const ws = [...weights].sort((a, b) => a.date.localeCompare(b.date));
-  const recent = ws.filter(w => w.date >= addDays(t, -90));
+  const RANGES = [["7", "7 days"], ["30", "30 days"], ["90", "3 months"], ["365", "1 year"], ["all", "All"]];
+  $("wRange").innerHTML = RANGES.map(([k, l]) => `<button type="button" data-r="${k}" aria-pressed="${k === wrange}">${l}</button>`).join("");
+  const recent = wrange === "all" ? ws : ws.filter(w => w.date >= addDays(t, -(+wrange)));
   if (recent.length >= 2) {
     const mn = Math.min(...recent.map(w => w.kg)), mx = Math.max(...recent.map(w => w.kg));
     const lo = Math.floor(mn - 1), hi = Math.ceil(mx + 1);
@@ -1536,18 +1580,27 @@ function renderProgress() {
     $("wSum").innerHTML = `<b class="num">${fmt(lw.kg, 1)} kg</b> now · <span class="num">${diff > 0 ? "+" : diff < 0 ? "−" : "±"}${fmt(Math.abs(diff), 1)} kg</span> in ${ndays} day${ndays === 1 ? "" : "s"}`;
   } else {
     $("wChart").innerHTML = "";
-    $("wSum").textContent = ws.length ? `${fmt(ws[ws.length - 1].kg, 1)} kg logged. Add another day to see a chart.` : "Log your weight to see how it changes. Weighing at the same time of day works best.";
+    $("wSum").textContent = ws.length >= 2 ? `Fewer than 2 weigh-ins in this period. Pick a longer period or keep logging. Latest: ${fmt(ws[ws.length - 1].kg, 1)} kg.` : ws.length ? `${fmt(ws[ws.length - 1].kg, 1)} kg logged. Add another day to see a chart.` : "Log your weight to see how it changes. Weighing at the same time of day works best.";
   }
   const existing = weights.find(w => w.date === t);
   if (document.activeElement !== $("wIn")) $("wIn").value = existing ? existing.kg : "";
   $("wList").innerHTML = ws.slice(-8).reverse().map(w => `<div class="rrow"><span class="grow num">${dateOf(w.date).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span><b class="num">${fmt(w.kg, 1)} kg</b><button class="mini" type="button" data-wdel="${w.date}">Delete</button></div>`).join("");
 }
+$("wRange").onclick = e => { const b = e.target.closest("[data-r]"); if (!b) return; wrange = b.dataset.r; store.set("rcc.wrange", wrange); renderProgress(); };
 $("weekChart").onclick = e => { const r = e.target.closest("[data-day]"); if (!r) return; curDay = r.dataset.day; setTab("today"); };
 $("wSave").onclick = () => {
   const kg = +$("wIn").value; if (!(kg >= 20 && kg <= 400)) { $("wIn").focus(); return; }
   const t = keyOf(new Date());
   weights = weights.filter(w => w.date !== t); weights.push({ date: t, kg: Math.round(kg * 10) / 10 });
-  store.set("rcc.weights", weights); $("wIn").blur(); renderProgress();
+  store.set("rcc.weights", weights); $("wIn").blur();
+  let note = "";
+  if (goals?.auto && profile?.age) {
+    profile = { ...profile, weight: String(Math.round(kg * 10) / 10) }; store.set("rcc.profile", profile);
+    const G = goalFrom(profile);
+    if (G && G.kcal !== goals.kcal) { note = `Daily goal updated from ${fmt(goals.kcal)} to ${fmt(G.kcal)} kcal.`; goals = { ...goals, kcal: G.kcal }; store.set("rcc.goals", goals); }
+  }
+  renderProgress();
+  $("wNote").hidden = !note; $("wNote").textContent = note;
 };
 $("wList").onclick = e => {
   const d = e.target.closest("[data-wdel]"); if (!d) return;
