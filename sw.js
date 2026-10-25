@@ -1,5 +1,5 @@
 // Offline support: keeps the app files on the phone. Change VERSION when you upload new files.
-const VERSION = "rcc-v1";
+const VERSION = "rcc-v2";
 const FILES = ["./", "index.html", "foods-usda.js", "zxing.min.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => {
