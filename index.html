@@ -1,0 +1,963 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recipe Calorie Counter</title>
+<meta name="theme-color" content="#1B1E3C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Calories">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: a phone app — dark "kitchen display" card on top always shows kcal per portion; ingredients stack below; editing happens in bottom sheets. */
+:root {
+  --bg: #F2F2F6; --card: #FFFFFF; --ink: #15172A; --muted: #6B6E82; --line: #E5E5ED;
+  --hero: #1B1E3C; --hero-ink: #F4F4FA; --hero-muted: #A9ACCB;
+  --pop: #FFC83A; --pop-ink: #1B1E3C; --bar: #F0B400; --chip: #EDEDF3; --danger: #C2412D;
+  --serif: "Young Serif", Georgia, "Times New Roman", serif;
+  --sans: "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --shadow: 0 1px 2px rgba(21,23,42,.06), 0 4px 16px rgba(21,23,42,.06);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0D0E16; --card: #171927; --ink: #ECEDF6; --muted: #9B9EB5; --line: #272A3B;
+    --hero: #252A57; --hero-ink: #F4F4FA; --hero-muted: #B4B7D6; --pop: #FFD35E; --pop-ink: #1B1E3C;
+    --bar: #FFD35E; --chip: #222537; --danger: #FF8A73; --shadow: none; color-scheme: dark;
+  }
+}
+[hidden] { display: none !important; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.4;
+  padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px));
+  padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+}
+.app { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 0; background: none; padding: 0; }
+:focus-visible { outline: 2px solid var(--pop); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+svg.i { width: 20px; height: 20px; flex: none; }
+input[type=number] { -moz-appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+.hero { background: var(--hero); color: var(--hero-ink); border-radius: 26px; padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 16px; position: relative; overflow: hidden; }
+.hero::after { content: ""; position: absolute; right: -60px; top: -60px; width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, rgba(255,200,58,.22), transparent 70%); pointer-events: none; }
+.hero-top { display: flex; align-items: center; gap: 8px; position: relative; z-index: 1; }
+#recipeName { flex: 1; min-width: 0; font-family: var(--serif); font-size: 22px; line-height: 1.2; background: transparent; border: 0; color: inherit; padding: 4px 0; text-overflow: ellipsis; }
+#recipeName:focus { outline: none; border-bottom: 1px solid var(--hero-muted); }
+.round { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(244,244,250,.12); color: var(--hero-ink); flex: none; }
+.readout { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; position: relative; z-index: 1; }
+.kcal-big { display: flex; flex-direction: column; min-width: 0; }
+.kcal-big small, .stepper small { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--hero-muted); }
+.kcal-big .n { font-size: clamp(46px, 14vw, 68px); white-space: nowrap; font-weight: 800; line-height: 1; letter-spacing: -.035em; color: var(--pop); }
+.kcal-big .n span { font-size: 20px; letter-spacing: 0; margin-left: 4px; font-weight: 700; }
+.stepper { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.step { display: flex; align-items: center; background: rgba(244,244,250,.12); border-radius: 999px; padding: 4px; }
+.step button { width: 34px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--hero-ink); }
+.step button:active { background: rgba(244,244,250,.18); }
+.step input { width: 40px; text-align: center; background: transparent; border: 0; color: var(--hero-ink); font-weight: 800; font-size: 20px; padding: 0; }
+.step input:focus { outline: none; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid rgba(244,244,250,.16); padding-top: 12px; position: relative; z-index: 1; }
+.stats div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stats div + div { padding-left: 12px; border-left: 1px solid rgba(244,244,250,.16); }
+.stats b { font-size: 16px; font-weight: 800; }
+.stats span { font-size: 12px; color: var(--hero-muted); }
+
+.addbar { display: flex; gap: 10px; }
+.searchbox { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; background: var(--card); border-radius: 16px; padding: 0 14px; box-shadow: var(--shadow); border: 1px solid var(--line); }
+.searchbox svg { color: var(--muted); }
+.searchbox input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 15px 0; font-size: 16px; }
+.searchbox input:focus { outline: none; }
+.searchbox:focus-within { border-color: var(--ink); }
+.scan { width: 54px; border-radius: 16px; background: var(--pop); color: var(--pop-ink); display: grid; place-items: center; flex: none; box-shadow: var(--shadow); }
+.scan svg { width: 24px; height: 24px; }
+
+.results { background: var(--card); border-radius: 18px; box-shadow: var(--shadow); border: 1px solid var(--line); overflow: hidden; }
+.r { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; border-top: 1px solid var(--line); }
+.r:first-child { border-top: 0; }
+.r:active, .r:hover { background: var(--chip); }
+.r .nm { flex: 1; min-width: 0; font-weight: 600; }
+.r .nm small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+.tag { font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; border-radius: 6px; padding: 2px 6px; margin-left: 6px; vertical-align: 2px; background: var(--chip); color: var(--muted); }
+.tag.mine { background: var(--pop); color: var(--pop-ink); }
+.r .kc { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.more { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.notice { font-size: 14px; color: var(--muted); padding: 2px 4px; margin: 0; }
+.notice.err { color: var(--danger); }
+.pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 9px 14px; font-size: 14px; font-weight: 700; background: var(--chip); }
+.pill.dark { background: var(--ink); color: var(--bg); }
+
+.sec-head { display: flex; align-items: baseline; justify-content: space-between; padding: 4px 4px 0; }
+.sec-head h2 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 20px; }
+.sec-head span { font-size: 13px; color: var(--muted); font-weight: 600; }
+.list { background: var(--card); border-radius: 20px; box-shadow: var(--shadow); border: 1px solid var(--line); overflow: hidden; }
+.ing { width: 100%; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; padding: 14px 16px; text-align: left; border-top: 1px solid var(--line); }
+.ing:first-child { border-top: 0; }
+.ing .nm { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ing .q { font-size: 13px; color: var(--muted); grid-column: 1; }
+.ing .kc { grid-row: 1 / span 2; grid-column: 2; text-align: right; font-weight: 800; font-size: 17px; }
+.ing .kc small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); }
+.ing .bar { grid-column: 1 / -1; height: 4px; border-radius: 4px; background: var(--chip); overflow: hidden; margin-top: 6px; }
+.ing .bar i { display: block; height: 100%; background: var(--bar); border-radius: 4px; }
+.emptystate { padding: 26px 18px; text-align: center; color: var(--muted); }
+.emptystate b { display: block; color: var(--ink); font-family: var(--serif); font-weight: 400; font-size: 18px; margin-bottom: 4px; }
+
+.weigh { background: var(--card); border-radius: 20px; box-shadow: var(--shadow); border: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.weigh h3 { margin: 0; font-size: 15px; font-weight: 800; }
+.weigh p { margin: 0; font-size: 13px; color: var(--muted); }
+.wrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fld { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; min-width: 0; }
+.inp { display: flex; align-items: center; background: var(--chip); border-radius: 12px; padding: 0 12px; border: 1px solid transparent; }
+.inp:focus-within { border-color: var(--ink); }
+.inp input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 12px 0; font-size: 17px; font-weight: 700; text-transform: none; letter-spacing: 0; color: var(--ink); }
+.inp input:focus { outline: none; }
+.inp span { color: var(--muted); font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 14px; white-space: nowrap; }
+.wout { display: flex; justify-content: space-between; gap: 8px; background: var(--pop); color: var(--pop-ink); border-radius: 12px; padding: 12px 14px; font-size: 14px; flex-wrap: wrap; }
+.wout b { font-weight: 800; font-size: 16px; }
+
+.links { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.foot { text-align: center; font-size: 12px; color: var(--muted); margin: 0; }
+
+.scrim { position: fixed; inset: 0; z-index: 30; background: rgba(10,11,20,.5); display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  width: 100%; max-width: 520px; max-height: 92%; overflow: auto; background: var(--card); border-radius: 26px 26px 0 0;
+  padding: 10px max(18px, env(safe-area-inset-right, 0px)) calc(22px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 14px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .scrim:not([hidden]) .sheet { animation: up .22s cubic-bezier(.2,.8,.2,1); }
+}
+@keyframes up { from { transform: translateY(40px); opacity: .4; } }
+.grab { width: 40px; height: 5px; border-radius: 5px; background: var(--line); margin: 0 auto 2px; }
+.sh-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.sh-head h3 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 22px; line-height: 1.2; overflow-wrap: anywhere; }
+.sh-head p { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.x { width: 36px; height: 36px; border-radius: 50%; background: var(--chip); display: grid; place-items: center; flex: none; }
+.qtybig { display: flex; align-items: baseline; gap: 8px; background: var(--chip); border-radius: 18px; padding: 10px 16px; border: 1px solid transparent; }
+.qtybig:focus-within { border-color: var(--ink); }
+.qtybig input { flex: 1; min-width: 0; border: 0; background: transparent; font-size: 44px; font-weight: 800; letter-spacing: -.02em; padding: 0; }
+.qtybig input:focus { outline: none; }
+.qtybig span { font-size: 18px; font-weight: 700; color: var(--muted); text-align: right; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chips button { border-radius: 999px; padding: 9px 14px; font-weight: 700; font-size: 14px; background: var(--chip); white-space: nowrap; }
+.chips button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.preview { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 2px; gap: 8px; }
+.preview span { color: var(--muted); font-size: 14px; }
+.preview b { font-size: 26px; font-weight: 800; }
+.cta { width: 100%; border-radius: 16px; padding: 16px; font-weight: 800; font-size: 16px; background: var(--pop); color: var(--pop-ink); }
+.cta:disabled { opacity: .45; cursor: default; }
+.ghost { width: 100%; border-radius: 16px; padding: 13px; font-weight: 700; font-size: 15px; color: var(--danger); }
+.secondary { width: 100%; border-radius: 16px; padding: 14px; font-weight: 700; font-size: 15px; background: var(--chip); }
+.form { display: flex; flex-direction: column; gap: 12px; }
+.form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.status { font-size: 14px; color: var(--muted); margin: 0; }
+.status.err { color: var(--danger); }
+.rlist { display: flex; flex-direction: column; }
+.rrow { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
+.rrow:first-child { border-top: 0; }
+.rrow .open { flex: 1; min-width: 0; text-align: left; }
+.rrow .open b { display: block; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rrow .open small { color: var(--muted); font-size: 13px; }
+.rrow .open.cur b::after { content: "Open"; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; background: var(--pop); color: var(--pop-ink); border-radius: 5px; padding: 2px 5px; margin-left: 8px; vertical-align: 2px; }
+.mini { font-size: 13px; font-weight: 700; color: var(--muted); padding: 8px 6px; }
+.mini.armed { color: var(--danger); }
+.code { font-variant-numeric: tabular-nums; letter-spacing: .03em; }
+.prose { font-size: 14px; color: var(--muted); margin: 0; }
+.prose b { color: var(--ink); }
+.spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--ink); animation: rot .8s linear infinite; display: inline-block; vertical-align: -3px; margin-right: 8px; }
+@keyframes rot { to { transform: rotate(360deg); } }
+
+/* Scanner */
+.scanner { position: fixed; inset: 0; z-index: 40; background: #000; color: #fff; display: flex; flex-direction: column; }
+.scanner video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.scanner .frame { position: absolute; left: 8%; right: 8%; top: 38%; height: 22%; border-radius: 18px; box-shadow: 0 0 0 9999px rgba(0,0,0,.5); border: 3px solid var(--pop); }
+.scanner .frame::after { content: ""; position: absolute; left: 10px; right: 10px; top: 50%; height: 2px; background: rgba(255,200,58,.85); }
+.scanner .top { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center; padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 0; }
+.scanner .top b { font-weight: 800; font-size: 17px; }
+.scanner .x { background: rgba(255,255,255,.18); color: #fff; }
+.scanner .bottom { position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; padding: 16px 16px calc(24px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 10px; align-items: center; text-align: center; }
+.scanner .bottom p { margin: 0; font-size: 15px; }
+.scanner .bottom .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.scanner .pill { background: rgba(255,255,255,.18); color: #fff; }
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="hero" aria-label="Calories per portion">
+    <div class="hero-top">
+      <input id="recipeName" aria-label="Recipe name">
+      <button class="round" id="openRecipes" type="button" aria-label="My recipes">
+        <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2Zm0 0A2 2 0 0 0 6 22h13"/><path d="M9 8h6"/></svg>
+      </button>
+      <button class="round" id="openMenu" type="button" aria-label="Backup and settings">
+        <svg class="i" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+      </button>
+    </div>
+    <div class="readout">
+      <div class="kcal-big"><small>Per portion</small><div class="n num" id="perPortion">0<span>kcal</span></div></div>
+      <div class="stepper">
+        <small>Portions</small>
+        <div class="step">
+          <button type="button" id="minus" aria-label="Fewer portions"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 12h12"/></svg></button>
+          <input id="portions" class="num" type="number" inputmode="numeric" min="1" value="4" aria-label="Number of portions">
+          <button type="button" id="plus" aria-label="More portions"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 12h12M12 6v12"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <div class="stats">
+      <div><b class="num" id="sTotal">0</b><span>kcal in total</span></div>
+      <div><b class="num" id="sWeight">0 g</b><span id="sWeightLab">raw, each</span></div>
+      <div><b class="num" id="sRI">0%</b><span>of daily 2,000</span></div>
+    </div>
+  </section>
+
+  <div class="addbar">
+    <label class="searchbox">
+      <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Add an ingredient" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Search ingredients">
+    </label>
+    <button class="scan" id="scanBtn" type="button" aria-label="Scan a barcode">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10.5 8v8M14 8v8M17 8v8"/></svg>
+    </button>
+    <input type="file" id="photoFile" accept="image/*" capture="environment" hidden>
+  </div>
+  <p class="notice" id="notice" hidden></p>
+  <div class="results" id="results" hidden></div>
+
+  <div class="sec-head"><h2>Ingredients</h2><span class="num" id="count"></span></div>
+  <div class="list" id="items"></div>
+
+  <section class="weigh">
+    <div><h3>Weigh your plate</h3><p>Weigh the whole cooked dish (without the pot), then weigh your plate. You get the calories on your plate.</p></div>
+    <div class="wrow">
+      <label class="fld">Whole dish<span class="inp"><input id="cooked" class="num" type="number" inputmode="decimal" min="0" placeholder="0"><span>g</span></span></label>
+      <label class="fld">My plate<span class="inp"><input id="plate" class="num" type="number" inputmode="decimal" min="0" placeholder="0"><span>g</span></span></label>
+    </div>
+    <div class="wout" id="wout" hidden><span id="w100"></span><b class="num" id="wplate"></b></div>
+  </section>
+
+  <div class="links">
+    <button class="pill" id="customBtn" type="button">Add from a label</button>
+    <button class="pill" id="productsBtn" type="button">My products</button>
+  </div>
+  <p class="foot">Everything is saved on this phone. Daily 2,000 kcal is the reference intake on UK labels.</p>
+</div>
+
+<div class="scrim" id="scrim" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+
+<div class="scanner" id="scanner" hidden>
+  <video id="video" playsinline muted></video>
+  <div class="frame" aria-hidden="true"></div>
+  <div class="top"><b>Scan a barcode</b><button class="x" id="scanClose" type="button" aria-label="Close scanner"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="bottom">
+    <p id="scanMsg">Point the camera at the barcode</p>
+    <div class="row">
+      <button class="pill" id="scanPhoto" type="button">Take a photo instead</button>
+      <button class="pill" id="scanType" type="button">Type the number</button>
+    </div>
+  </div>
+</div>
+
+<script src="zxing.min.js" defer></script>
+<script src="foods-usda.js" defer></script>
+<script>
+(() => {
+"use strict";
+const RAW = `Chicken breast, skinless, raw|106|1|170|breast
+Chicken thigh, skinless, raw|125|1|90|thigh
+Chicken thigh, skin on, raw|215|1|110|thigh
+Chicken drumstick, raw|160|1|100|drumstick
+Chicken wings, raw|190|1|45|wing
+Whole chicken, raw|200|1||
+Turkey breast mince, raw|120|1||
+Turkey mince 7% fat, raw|150|1||
+Beef mince 5% fat, raw|125|1||
+Beef mince 10% fat, raw|175|1||
+Beef mince 20% fat, raw|250|1||
+Beef steak, sirloin, raw|175|1|225|steak
+Beef rump steak, raw|130|1|225|steak
+Beef diced braising steak, raw|140|1||
+Pork mince, raw|220|1||
+Pork loin chop, raw|180|1|150|chop
+Pork belly, raw|450|1||
+Pork sausage, raw|250|1|57|sausage
+Bacon, back rasher, raw|215|1|25|rasher
+Bacon, streaky, raw|280|1|15|rasher
+Ham, sliced|110|1|12|slice
+Chorizo|455|1||
+Pepperoni|500|1||
+Salami|400|1|6|slice
+Lamb mince, raw|250|1||
+Lamb leg, raw|200|1||
+Salmon fillet, raw|208|1|120|fillet
+Cod fillet, raw|80|1|130|fillet
+Haddock fillet, raw|81|1|130|fillet
+Sea bass fillet, raw|100|1|100|fillet
+Tilapia fillet, raw|96|1|120|fillet
+Mackerel, raw|205|1||
+Tuna, canned in water, drained|108|1|112|tin
+Tuna, canned in oil, drained|190|1|112|tin
+Sardines, canned in oil, drained|210|1||
+Prawns, raw or cooked|70|1||
+Egg, whole|143|1.03|50|egg
+Egg white|52|1.03|33|white
+Egg yolk|322|1.03|17|yolk
+Tofu, firm|145|1||
+Tempeh|192|1||
+Quorn mince|105|1||
+Milk, whole|64|1.03||
+Milk, semi-skimmed|47|1.03||
+Milk, skimmed|35|1.03||
+Oat milk|45|1.03||
+Almond milk, unsweetened|13|1.03||
+Soya milk|40|1.03||
+Kefir|55|1.03||
+Butter|740|0.96||
+Spread, margarine|600|0.96||
+Double cream|450|1||
+Single cream|190|1||
+Crème fraîche, full fat|290|1||
+Sour cream|200|1||
+Greek yogurt, full fat|130|1.05||
+Greek yogurt, 0% fat|57|1.05||
+Natural yogurt|70|1.05||
+Cheddar cheese|415|0.45||
+Mozzarella|250|1|125|ball
+Parmesan|400|0.4||
+Feta|265|1||
+Cream cheese, full fat|240|1||
+Cream cheese, light|150|1||
+Cottage cheese|98|1||
+Quark / curd cheese, low fat|72|1||
+Ricotta|140|1||
+Halloumi|320|1||
+Brie|335|1||
+Goat's cheese|320|1||
+Mascarpone|430|1||
+White rice, dry|355|0.78||
+Basmati rice, dry|350|0.78||
+Brown rice, dry|360|0.78||
+White rice, cooked|130|0.7||
+Pasta, dry|355|0.45||
+Pasta, cooked|158|0.55||
+Egg noodles, dry|380|1|63|nest
+Rice noodles, dry|360|1||
+Couscous, dry|360|0.73||
+Quinoa, dry|368|0.72||
+Bulgur wheat, dry|342|0.6||
+Buckwheat, dry|343|0.75||
+Porridge oats|375|0.38||
+Plain flour|345|0.53||
+Self-raising flour|340|0.53||
+Wholemeal flour|340|0.5||
+Cornflour|380|0.55||
+Tapioca flour|350|0.5||
+Cassava flour (farinha)|360|0.6||
+Polenta, dry|360|0.65||
+Breadcrumbs|370|0.45||
+White bread|250|1|36|slice
+Wholemeal bread|230|1|38|slice
+Tortilla wrap|305|1|62|wrap
+Pitta bread|265|1|60|pitta
+Bagel|255|1|85|bagel
+Potato, raw|77|1|170|potato
+Sweet potato, raw|86|1|150|potato
+Cassava, raw|160|1||
+Gnocchi|150|1||
+Oven chips|160|1||
+White sugar|400|0.85||
+Brown sugar|390|0.85||
+Icing sugar|400|0.5||
+Honey|304|1.42||
+Maple syrup|260|1.32||
+Golden syrup|325|1.4||
+Jam|250|1.3||
+Dark chocolate 70%|600|0.7|10|square
+Milk chocolate|535|0.7|6|square
+Chocolate chips|500|0.7||
+Cocoa powder|360|0.4||
+Peanut butter|600|1.07||
+Chocolate hazelnut spread|540|1.2||
+Olive oil|884|0.92||
+Sunflower / vegetable oil|884|0.92||
+Rapeseed oil|884|0.92||
+Coconut oil|862|0.92||
+Sesame oil|884|0.92||
+Ghee|880|0.91||
+Onion|40|1|150|onion
+Red onion|40|1|150|onion
+Spring onion|32|1|15|onion
+Garlic|149|1|5|clove
+Ginger, fresh|80|1||
+Carrot|41|1|70|carrot
+Celery|16|1|40|stick
+Bell pepper|28|1|160|pepper
+Chilli, fresh|40|1|10|chilli
+Tomato|18|1|120|tomato
+Cherry tomatoes|18|1|15|tomato
+Chopped tomatoes, tinned|22|1.03|400|tin
+Passata|30|1.03||
+Tomato purée|82|1.1||
+Mushrooms|22|0.4|18|mushroom
+Courgette|17|1|200|courgette
+Aubergine|25|1|300|aubergine
+Broccoli|34|0.4||
+Cauliflower|25|0.45||
+Spinach|23|0.15||
+Kale|40|0.2||
+Lettuce|15|0.2||
+Cucumber|15|1|300|cucumber
+Cabbage|25|0.4||
+Leek|31|1|200|leek
+Peas, frozen|70|0.6||
+Sweetcorn, tinned, drained|82|0.7||
+Green beans|31|0.5||
+Butternut squash|45|0.6||
+Pumpkin|26|0.6||
+Asparagus|20|1|20|spear
+Beetroot, cooked|44|1|50|beetroot
+Avocado|160|1|140|avocado
+Chickpeas, tinned, drained|120|0.7|240|tin
+Kidney beans, tinned, drained|105|0.7|240|tin
+Black beans, tinned, drained|100|0.7|240|tin
+Black beans, dry|340|0.8||
+Butter beans, tinned, drained|85|0.7|240|tin
+Baked beans|78|1.05|415|tin
+Red lentils, dry|330|0.8||
+Lentils, cooked|116|0.8||
+Apple|52|1|180|apple
+Banana|89|1|120|banana
+Orange|47|1|140|orange
+Lemon|29|1|100|lemon
+Lemon juice|22|1.03|30|lemon
+Lime juice|25|1.03|20|lime
+Strawberries|32|0.6|12|strawberry
+Blueberries|57|0.6||
+Raspberries|52|0.5||
+Mango|60|1|200|mango
+Pineapple|50|0.7||
+Grapes|69|0.65||
+Raisins|299|0.6||
+Dates, medjool|277|1|24|date
+Dried apricots|241|0.6|8|apricot
+Coconut milk, tinned|200|1|400|tin
+Coconut milk, light|75|1|400|tin
+Desiccated coconut|660|0.35||
+Almonds|579|0.6||
+Ground almonds|610|0.4||
+Walnuts|654|0.5||
+Cashews|553|0.55||
+Peanuts|567|0.6||
+Pine nuts|673|0.57||
+Pumpkin seeds|560|0.55||
+Sunflower seeds|584|0.55||
+Sesame seeds|573|0.6||
+Chia seeds|486|0.8||
+Flaxseed, ground|534|0.5||
+Mayonnaise|700|0.95||
+Mayonnaise, light|260|0.95||
+Ketchup|110|1.15||
+Soy sauce|60|1.1||
+BBQ sauce|170|1.2||
+Sweet chilli sauce|210|1.2||
+Green pesto|440|1||
+Dijon mustard|150|1.05||
+Worcestershire sauce|78|1.1||
+Balsamic vinegar|88|1.05||
+Vinegar, white or cider|20|1||
+Hummus|290|1||
+Curry paste|180|1.1||
+Stock cube|300|1|10|cube
+Stock, made up|8|1||
+Gravy granules|380|0.6||
+Salsa|30|1.05||
+Salt|0|1.2||
+Black pepper|251|0.5||
+Paprika|282|0.45||
+Ground cumin|375|0.45||
+Curry powder|325|0.45||
+Ground cinnamon|247|0.5||
+Dried herbs|270|0.2||
+Baking powder|53|0.9||
+Bicarbonate of soda|0|1||
+Dried yeast|325|0.75|7|sachet
+Vanilla extract|288|0.88||
+Gelatine|335|0.6|12|sachet
+Red wine|85|0.99||
+White wine|82|0.99||
+Beer|43|1||
+Water|0|1||`;
+const CORE = RAW.split("\n").map(l => {
+  const [name, k, d, p, pl] = l.split("|");
+  return { name, kcal: +k, d: +d || 1, m: +p ? [[pl || "piece", +p]] : [], src: "core" };
+});
+let USDA = [];
+const loadUSDA = () => { if (!USDA.length && Array.isArray(self.USDA)) USDA = self.USDA.map(e => ({ name: e[0], kcal: e[1], d: e[2] || 0, m: e[3] || [], src: "usda" })); };
+window.addEventListener("load", () => { loadUSDA(); if ($("q").value) showResults(); });
+
+const METRIC = ["g", "kg", "oz", "lb"], VOLUME = ["ml", "l", "tsp", "tbsp", "cup"];
+const LABEL = { g: "g", kg: "kg", oz: "oz", lb: "lb", ml: "ml", l: "litre", tsp: "tsp", tbsp: "tbsp", cup: "cup" };
+const RI = 2000;
+const ICON_X = `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>`;
+
+const store = {
+  get(k, fb) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch { return fb; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+const uid = () => Math.random().toString(36).slice(2, 10);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const $ = id => document.getElementById(id);
+const fmt = (n, dp = 0) => (Math.round(n * 10 ** dp) / 10 ** dp).toLocaleString("en-GB", { maximumFractionDigits: dp });
+
+let myFoods = store.get("rcc.products", []);
+let recipes = store.get("rcc.recipes", null);
+let currentId = store.get("rcc.current", null);
+if (!recipes || !recipes.length) {
+  const mk = (n, qty, unit) => ({ ...pick(CORE.find(x => x.name === n)), qty, unit });
+  recipes = [{ id: uid(), name: "Chicken & rice bake (example)", portions: 4, cooked: "",
+    items: [mk("Chicken breast, skinless, raw", 500, "g"), mk("Basmati rice, dry", 250, "g"), mk("Onion", 1, "m0"),
+      mk("Bell pepper", 2, "m0"), mk("Olive oil", 2, "tbsp"), mk("Chopped tomatoes, tinned", 1, "m0"), mk("Cheddar cheese", 60, "g")] }];
+  currentId = recipes[0].id;
+}
+let recipe = recipes.find(r => r.id === currentId) || recipes[0];
+let askedPersist = false;
+function save() {
+  store.set("rcc.recipes", recipes); store.set("rcc.current", recipe.id); store.set("rcc.products", myFoods);
+  if (!askedPersist) { askedPersist = true; try { navigator.storage?.persist?.(); } catch {} }
+}
+function pick(f) { return { name: f.name, kcal: f.kcal, d: f.d || 0, m: f.m || [] }; }
+
+function unitsFor(f) { return ["g", ...(f.m || []).map((_, i) => "m" + i), "kg", "oz", "lb", ...(f.d ? VOLUME : [])]; }
+function grams(it) {
+  const q = +it.qty || 0, d = it.d || 1, u = it.unit || "g";
+  if (u[0] === "m" && u.length <= 3 && u !== "ml") return q * ((it.m || [])[+u.slice(1)]?.[1] || 0);
+  switch (u) {
+    case "g": return q; case "kg": return q * 1000; case "oz": return q * 28.35; case "lb": return q * 453.6;
+    case "ml": return q * d; case "l": return q * 1000 * d; case "tsp": return q * 5 * d; case "tbsp": return q * 15 * d; case "cup": return q * 240 * d;
+  }
+  return 0;
+}
+const kcalOf = it => grams(it) * it.kcal / 100;
+function unitName(f, u, q) {
+  if (u[0] === "m" && u !== "ml") { const lab = (f.m || [])[+u.slice(1)]?.[0] || "piece"; return +q === 1 || /,|\s/.test(lab) ? lab : lab + "s"; }
+  return LABEL[u] || u;
+}
+function chipName(f, u) { return u[0] === "m" && u !== "ml" ? `${(f.m || [])[+u.slice(1)]?.[0]} (${fmt((f.m || [])[+u.slice(1)]?.[1])} g)` : LABEL[u]; }
+
+// ---------- Render
+function render() {
+  if (document.activeElement !== $("recipeName")) $("recipeName").value = recipe.name;
+  if (document.activeElement !== $("portions")) $("portions").value = recipe.portions;
+  if (document.activeElement !== $("cooked")) $("cooked").value = recipe.cooked || "";
+  const max = Math.max(1, ...recipe.items.map(kcalOf));
+  $("count").textContent = recipe.items.length ? `${recipe.items.length} item${recipe.items.length === 1 ? "" : "s"}` : "";
+  $("items").innerHTML = recipe.items.length ? recipe.items.map((it, i) => {
+    const k = kcalOf(it);
+    return `<button class="ing" type="button" data-i="${i}">
+      <span class="nm">${esc(it.name)}</span>
+      <span class="kc num">${fmt(k)}<small>kcal</small></span>
+      <span class="q num">${fmt(+it.qty || 0, 2)} ${esc(unitName(it, it.unit, it.qty))}${it.unit !== "g" && grams(it) ? ` · ${fmt(grams(it))} g` : ""}</span>
+      <span class="bar"><i style="width:${(k / max * 100).toFixed(1)}%"></i></span>
+    </button>`;
+  }).join("") : `<div class="emptystate"><b>Nothing in the pot yet</b>Search above, or tap the yellow button to scan a barcode.</div>`;
+  totals();
+}
+function totals() {
+  const total = recipe.items.reduce((s, it) => s + kcalOf(it), 0);
+  const weight = recipe.items.reduce((s, it) => s + grams(it), 0);
+  const p = Math.max(1, Math.round(+recipe.portions || 1));
+  const per = total / p, cooked = +recipe.cooked || 0;
+  $("perPortion").innerHTML = `${fmt(per)}<span>kcal</span>`;
+  $("sTotal").textContent = fmt(total);
+  $("sWeight").textContent = `${fmt((cooked || weight) / p)} g`;
+  $("sWeightLab").textContent = cooked ? "cooked, each" : "raw, each";
+  $("sRI").textContent = `${fmt(per / RI * 100)}%`;
+  const plate = +$("plate").value || 0;
+  $("wout").hidden = !(cooked && total);
+  $("w100").textContent = cooked ? `${fmt(total / cooked * 100)} kcal per 100 g` : "";
+  $("wplate").textContent = plate && cooked ? `Your plate: ${fmt(total / cooked * plate)} kcal` : "Now enter your plate";
+}
+$("items").addEventListener("click", e => { const b = e.target.closest("[data-i]"); if (b) amountSheet(recipe.items[+b.dataset.i], +b.dataset.i); });
+$("recipeName").addEventListener("input", e => { recipe.name = e.target.value; save(); });
+$("portions").addEventListener("input", e => { recipe.portions = Math.max(1, Math.round(+e.target.value || 1)); totals(); save(); });
+$("portions").addEventListener("blur", () => { $("portions").value = recipe.portions; });
+const step = d => { recipe.portions = Math.max(1, (+recipe.portions || 1) + d); $("portions").value = recipe.portions; totals(); save(); };
+$("minus").onclick = () => step(-1);
+$("plus").onclick = () => step(1);
+$("cooked").addEventListener("input", e => { recipe.cooked = e.target.value; totals(); save(); });
+$("plate").addEventListener("input", totals);
+
+// ---------- Search
+const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+const STEM = w => w.length > 3 ? w.replace(/(ies|es|s)$/, m => m === "ies" ? "y" : "") : w;
+function search(q) {
+  loadUSDA();
+  const words = norm(q).split(/[\s,]+/).filter(Boolean).map(STEM);
+  if (!words.length) return [];
+  const out = [];
+  const pools = [[myFoods.map(f => ({ ...f, src: "mine" })), -30], [CORE, -20], [USDA, 0]];
+  for (const [pool, bonus] of pools) for (const f of pool) {
+    const n = norm(f.name); if (!words.every(w => n.includes(w))) continue;
+    let s = bonus + n.length / 40;
+    const first = n.split(/[\s,]+/)[0];
+    if (first.startsWith(words[0])) s -= 6;
+    if (f.src === "usda" && /\braw\b/.test(n)) s -= 1;
+    out.push({ f, s });
+  }
+  return out.sort((a, b) => a.s - b.s).slice(0, 30).map(x => x.f);
+}
+let lastRes = [];
+function showResults() {
+  const q = $("q").value.trim();
+  const box = $("results");
+  if (!q) { box.hidden = true; return; }
+  lastRes = search(q);
+  const tag = f => f.src === "mine" ? `<span class="tag mine">Mine</span>` : f.src === "usda" ? `<span class="tag">USDA</span>` : "";
+  box.innerHTML = lastRes.map((f, i) => `<button class="r" type="button" data-r="${i}"><span class="nm">${esc(f.name)}${tag(f)}${f.brand ? `<small>${esc(f.brand)}</small>` : ""}</span><span class="kc num">${fmt(f.kcal)} kcal</span></button>`).join("") +
+    (q.length < 3 ? "" : `<div class="more">${lastRes.length ? "" : `<span class="notice" style="width:100%;padding:0 0 4px">Nothing on this phone matches.</span>`}<button class="pill dark" type="button" id="onlineBtn">Search shop products online</button><button class="pill" type="button" id="ownBtn">Type it from the label</button></div>`);
+  box.hidden = !box.innerHTML;
+}
+$("q").addEventListener("input", () => { hideNotice(); showResults(); });
+$("results").addEventListener("click", e => {
+  const r = e.target.closest("[data-r]");
+  if (r) { const f = lastRes[+r.dataset.r]; clearSearch(); amountSheet(f); return; }
+  if (e.target.closest("#onlineBtn")) onlineSheet($("q").value.trim());
+  if (e.target.closest("#ownBtn")) productSheet({ name: $("q").value.trim() });
+});
+function clearSearch() { $("q").value = ""; $("results").hidden = true; $("q").blur(); }
+function notice(msg, err) { const n = $("notice"); n.hidden = false; n.className = "notice" + (err ? " err" : ""); n.textContent = msg; }
+function hideNotice() { $("notice").hidden = true; }
+
+// ---------- Amount sheet
+function defaultUnit(f) {
+  if (f.m?.length && f.src === "core") return "m0";
+  if (f.d && /\boil\b|milk|juice|syrup|honey|vinegar|wine|beer|water|stock, made|sauce/i.test(f.name)) return /\boil\b|honey|syrup|sauce|vinegar/i.test(f.name) ? "tbsp" : "ml";
+  return "g";
+}
+function amountSheet(food, editIndex, note) {
+  const editing = editIndex !== undefined;
+  let unit = editing ? food.unit : defaultUnit(food);
+  const units = unitsFor(food);
+  if (!units.includes(unit)) unit = "g";
+  const facts = [`${fmt(food.kcal)} kcal per 100 g`, ...(food.m || []).slice(0, 1).map(m => `1 ${m[0]} ≈ ${fmt(m[1])} g`)].join(" · ");
+  openSheet(`
+    <div class="sh-head"><div><h3>${esc(food.name)}</h3><p class="num">${esc(facts)}</p>${note ? `<p>${esc(note)}</p>` : ""}</div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
+    <label class="qtybig"><input id="aq" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="0" value="${editing ? esc(food.qty) : ""}" aria-label="Amount"><span id="aunit"></span></label>
+    <div class="chips" id="achips">${units.map(u => `<button type="button" data-u="${u}" aria-pressed="${u === unit}">${esc(chipName(food, u))}</button>`).join("")}</div>
+    <div class="preview"><span id="agrams"></span><b class="num" id="akcal">0 kcal</b></div>
+    <button class="cta" id="aok" type="button">${editing ? "Save" : "Add to recipe"}</button>
+    ${editing ? `<button class="ghost" id="adel" type="button">Remove from recipe</button>` : ""}`);
+  const upd = () => {
+    const it = { ...food, qty: $("aq").value, unit };
+    $("aunit").textContent = unitName(food, unit, $("aq").value || 0);
+    $("akcal").textContent = `${fmt(kcalOf(it))} kcal`;
+    $("agrams").textContent = unit !== "g" && +$("aq").value ? `≈ ${fmt(grams(it))} g` : "";
+    $("aok").disabled = !(+$("aq").value > 0);
+  };
+  $("achips").onclick = e => { const b = e.target.closest("[data-u]"); if (!b) return; unit = b.dataset.u; [...$("achips").children].forEach(c => c.setAttribute("aria-pressed", c === b)); upd(); };
+  $("aq").addEventListener("input", upd);
+  $("aq").addEventListener("keydown", e => { if (e.key === "Enter" && !$("aok").disabled) $("aok").click(); });
+  $("aok").onclick = () => {
+    const it = { ...pick(food), qty: $("aq").value, unit };
+    if (editing) recipe.items[editIndex] = it; else recipe.items.push(it);
+    save(); closeSheet(); render();
+  };
+  if (editing) $("adel").onclick = e => {
+    if (!e.target.dataset.armed) { e.target.dataset.armed = 1; e.target.textContent = "Tap again to remove"; return; }
+    recipe.items.splice(editIndex, 1); save(); closeSheet(); render();
+  };
+  upd();
+  setTimeout(() => $("aq")?.focus(), 80);
+}
+
+// ---------- Sheets
+function openSheet(html) { $("sheet").innerHTML = `<div class="grab"></div>` + html; $("scrim").hidden = false; }
+function closeSheet() { $("scrim").hidden = true; $("sheet").innerHTML = ""; }
+$("scrim").addEventListener("click", e => { if (e.target === $("scrim") || e.target.closest("[data-close]")) closeSheet(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") { if (!$("scanner").hidden) stopScanner(); else if (!$("scrim").hidden) closeSheet(); } });
+
+// ---------- Open Food Facts
+const OFF_FIELDS = "code,product_name,product_name_en,brands,nutriments,product_quantity,quantity";
+function fromOFF(p, code) {
+  const n = p.nutriments || {};
+  let kcal = n["energy-kcal_100g"];
+  if (kcal == null && n["energy_100g"] != null) kcal = n["energy_100g"] / 4.184;
+  if (kcal == null || isNaN(+kcal)) return null;
+  const name = (p.product_name_en || p.product_name || "").trim();
+  if (!name) return null;
+  const pq = +p.product_quantity;
+  return { id: uid(), name, brand: (p.brands || "").split(",")[0].trim(), kcal: Math.round(+kcal), d: 1, m: pq > 0 && pq < 5000 ? [["pack", pq]] : [], code: String(code || p.code || ""), src: "mine", note: "Open Food Facts" };
+}
+async function getJSON(url, ms = 12000) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), ms);
+  try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error("http " + r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+async function lookupBarcode(code) {
+  const j = await getJSON(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=${OFF_FIELDS}`);
+  return j && j.status === 1 && j.product ? fromOFF(j.product, code) : null;
+}
+function rememberProduct(f) {
+  if (f.code) myFoods = myFoods.filter(m => m.code !== f.code);
+  myFoods.unshift(f); save();
+}
+let onlineRes = [];
+async function onlineSheet(q) {
+  openSheet(`
+    <div class="sh-head"><div><h3>Shop products</h3><p>Results for “${esc(q)}” from Open Food Facts, UK products first.</p></div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
+    <div id="olist"><p class="status"><span class="spin"></span>Searching…</p></div>`);
+  if (!navigator.onLine) { $("olist").innerHTML = `<p class="status err">You're offline. Connect to the internet to search shop products.</p>`; return; }
+  try {
+    const base = "search_simple=1&action=process&json=1&page_size=30&fields=" + OFF_FIELDS + "&search_terms=" + encodeURIComponent(q);
+    let j = await getJSON("https://uk.openfoodfacts.org/cgi/search.pl?" + base, 20000);
+    onlineRes = (j.products || []).map(p => fromOFF(p)).filter(Boolean);
+    if (onlineRes.length < 5) {
+      j = await getJSON("https://world.openfoodfacts.org/cgi/search.pl?" + base, 20000);
+      const seen = new Set(onlineRes.map(f => f.code));
+      onlineRes.push(...(j.products || []).map(p => fromOFF(p)).filter(f => f && !seen.has(f.code)));
+    }
+    if (!$("olist")) return;
+    $("olist").innerHTML = onlineRes.length ? `<div class="rlist">${onlineRes.map((f, i) => `
+      <div class="rrow"><button class="open" type="button" data-o="${i}"><b>${esc(f.name)}</b><small class="num">${esc(f.brand || "No brand")} · ${fmt(f.kcal)} kcal/100 g${f.m.length ? ` · ${fmt(f.m[0][1])} g pack` : ""}</small></button></div>`).join("")}</div>
+      <p class="prose">Shared community data. Glance at the packet if a number looks odd.</p>`
+      : `<p class="status">No products found. Try fewer words, like the brand and the product.</p>`;
+    $("olist").onclick = e => { const b = e.target.closest("[data-o]"); if (!b) return; const f = onlineRes[+b.dataset.o]; rememberProduct(f); clearSearch(); amountSheet(f, undefined, "Saved to My products."); };
+  } catch {
+    if ($("olist")) $("olist").innerHTML = `<p class="status err">The product search didn't answer. It can be slow at busy times, so try again in a minute.</p>`;
+  }
+}
+
+// ---------- Barcode scanner
+let stream = null, scanTimer = null, detector = null, zreader = null, scanning = false;
+const FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"];
+async function getDetector() {
+  if (detector !== null) return detector;
+  try {
+    if ("BarcodeDetector" in window) {
+      const sup = await BarcodeDetector.getSupportedFormats();
+      const f = FORMATS.filter(x => sup.includes(x));
+      if (f.length) return (detector = new BarcodeDetector({ formats: f }));
+    }
+  } catch {}
+  return (detector = false);
+}
+function getZXing() {
+  if (zreader) return zreader;
+  const Z = window.ZXing; if (!Z) return null;
+  const hints = new Map();
+  hints.set(Z.DecodeHintType.TRY_HARDER, true);
+  hints.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E, Z.BarcodeFormat.CODE_128]);
+  zreader = new Z.MultiFormatReader(); zreader.setHints(hints);
+  return zreader;
+}
+function zxingDecode(source, sw, sh, crop, rotate) {
+  const reader = getZXing(); if (!reader) return null;
+  const Z = window.ZXing;
+  const [cx, cy, cw, ch] = crop || [0, 0, sw, sh];
+  const scale = Math.min(1, 1280 / Math.max(cw, ch));
+  const w = Math.round(cw * scale), h = Math.round(ch * scale);
+  const c = document.createElement("canvas"); c.width = rotate ? h : w; c.height = rotate ? w : h;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  if (rotate) { ctx.translate(h, 0); ctx.rotate(Math.PI / 2); }
+  ctx.drawImage(source, cx, cy, cw, ch, 0, 0, w, h);
+  const px = ctx.getImageData(0, 0, c.width, c.height).data;
+  const lum = new Uint8ClampedArray(c.width * c.height);
+  for (let i = 0, j = 0; i < lum.length; i++, j += 4) lum[i] = (px[j] * 299 + px[j + 1] * 587 + px[j + 2] * 114) / 1000;
+  try { return reader.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.RGBLuminanceSource(lum, c.width, c.height)))).getText(); }
+  catch { return null; } finally { reader.reset?.(); }
+}
+async function startScanner() {
+  $("scanMsg").textContent = "Point the camera at the barcode";
+  if (!navigator.mediaDevices?.getUserMedia) { $("photoFile").click(); return; }
+  $("scanner").hidden = false;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+  } catch {
+    $("scanMsg").textContent = "Camera not available. Allow camera access for this app in Settings, or take a photo instead.";
+    return;
+  }
+  const v = $("video"); v.srcObject = stream;
+  try { await v.play(); } catch {}
+  scanning = true;
+  const det = await getDetector();
+  const tick = async () => {
+    if (!scanning) return;
+    let code = null;
+    if (v.readyState >= 2 && v.videoWidth) {
+      if (det) { try { const r = await det.detect(v); code = r?.[0]?.rawValue || null; } catch {} }
+      else {
+        const vw = v.videoWidth, vh = v.videoHeight;
+        code = zxingDecode(v, vw, vh, [vw * 0.05, vh * 0.3, vw * 0.9, vh * 0.4]);
+      }
+    }
+    if (code && scanning) { navigator.vibrate?.(60); stopScanner(); handleCode(code); return; }
+    scanTimer = setTimeout(tick, det ? 120 : 220);
+  };
+  tick();
+}
+function stopScanner() {
+  scanning = false; clearTimeout(scanTimer);
+  stream?.getTracks().forEach(t => t.stop()); stream = null;
+  $("video").srcObject = null; $("scanner").hidden = true;
+}
+$("scanBtn").onclick = startScanner;
+$("scanClose").onclick = stopScanner;
+$("scanPhoto").onclick = () => { stopScanner(); $("photoFile").value = ""; $("photoFile").click(); };
+$("scanType").onclick = () => { stopScanner(); productSheet({ needCode: true }); };
+$("photoFile").addEventListener("change", async e => {
+  const file = e.target.files[0]; if (!file) return;
+  notice("Reading barcode…");
+  let code = null;
+  try {
+    const bmp = await createImageBitmap(file);
+    const det = await getDetector();
+    if (det) { try { code = (await det.detect(bmp))?.[0]?.rawValue || null; } catch {} }
+    if (!code) for (const rot of [false, true]) { code = zxingDecode(bmp, bmp.width, bmp.height, null, rot); if (code) break; }
+  } catch {}
+  if (!code) { notice("Couldn't read a barcode in that photo. Get close so the bars fill the frame, or type the number.", true); productSheet({ needCode: true }); return; }
+  hideNotice(); handleCode(code);
+});
+async function handleCode(code) {
+  const mine = myFoods.find(m => m.code === code);
+  if (mine) { amountSheet({ ...mine, src: "mine" }); return; }
+  openSheet(`<div class="sh-head"><div><h3>Looking up product</h3><p>Barcode <span class="code">${esc(code)}</span></p></div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div><p class="status"><span class="spin"></span>Checking Open Food Facts…</p>`);
+  if (!navigator.onLine) { productSheet({ barcode: code, why: "You're offline, so the product couldn't be looked up. Add it from the label." }); return; }
+  try {
+    const f = await lookupBarcode(code);
+    if ($("scrim").hidden) return;
+    if (f) { rememberProduct(f); amountSheet(f, undefined, `${f.brand ? f.brand + " · " : ""}From Open Food Facts, saved to My products.`); }
+    else productSheet({ barcode: code, why: "This product isn't in the online database yet. Add it once from the label and it's saved." });
+  } catch {
+    if (!$("scrim").hidden) productSheet({ barcode: code, why: "The online lookup didn't answer. Add it from the label, or close and scan again." });
+  }
+}
+
+// ---------- Product sheet (from the label)
+function productSheet({ name = "", barcode = "", needCode = false, why = "" }) {
+  openSheet(`
+    <div class="sh-head"><div><h3>${needCode ? "Type the barcode" : barcode ? "New product" : "Add from a label"}</h3>
+      <p>${esc(why || (needCode ? "Type the numbers under the bars. If it's not found, fill in the label details." : "Copy the energy figure from the nutrition panel. It's saved to My products."))}</p></div>
+      <button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
+    <form class="form" id="pf">
+      ${needCode ? `<label class="fld">Barcode<span class="inp"><input id="pfCode" class="code" inputmode="numeric" placeholder="e.g. 5000112637922"></span></label>
+        <button class="secondary" type="button" id="pfLook">Look it up</button>` : ""}
+      <label class="fld">Product name<span class="inp"><input id="pfName" value="${esc(name)}" placeholder="e.g. Greek style yogurt"></span></label>
+      <div class="two">
+        <label class="fld">Energy<span class="inp"><input id="pfKcal" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="0"><span>kcal/100 g</span></span></label>
+        <label class="fld">Pack size<span class="inp"><input id="pfPiece" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="optional"><span>g</span></span></label>
+      </div>
+      ${needCode ? "" : `<label class="fld">Barcode<span class="inp"><input id="pfCode" class="code" inputmode="numeric" value="${esc(barcode)}" placeholder="optional"></span></label>`}
+      <p class="status err" id="pfErr" hidden></p>
+      <button class="cta" type="submit">Save product</button>
+    </form>`);
+  if (needCode) { setTimeout(() => $("pfCode")?.focus(), 80); $("pfLook").onclick = () => { const c = $("pfCode").value.replace(/\D/g, ""); if (c) handleCode(c); }; }
+  $("pf").addEventListener("submit", e => {
+    e.preventDefault();
+    const piece = +$("pfPiece").value || 0, kcal = $("pfKcal").value;
+    const f = { id: uid(), name: $("pfName").value.trim(), kcal: +kcal, d: 1, m: piece ? [["pack", piece]] : [], code: $("pfCode").value.replace(/\D/g, ""), src: "mine" };
+    if (!f.name || kcal === "" || !(f.kcal >= 0)) { $("pfErr").hidden = false; $("pfErr").textContent = "Add a name and the kcal per 100 g."; return; }
+    rememberProduct(f); clearSearch(); amountSheet(f);
+  });
+}
+$("customBtn").onclick = () => productSheet({});
+
+$("productsBtn").onclick = productsSheet;
+function productsSheet() {
+  openSheet(`
+    <div class="sh-head"><div><h3>My products</h3><p>Scanned, found online or typed from labels. Tap one to add it.</p></div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
+    ${myFoods.length ? `<div class="rlist" id="pl">${myFoods.map((f, i) => `
+      <div class="rrow"><button class="open" type="button" data-use="${i}"><b>${esc(f.name)}</b>
+        <small class="num">${f.brand ? esc(f.brand) + " · " : ""}${fmt(f.kcal)} kcal/100 g${f.code ? ` · <span class="code">${esc(f.code)}</span>` : ""}</small></button>
+        <button class="mini" type="button" data-pdel="${i}">Delete</button></div>`).join("")}</div>`
+      : `<div class="emptystate"><b>No products yet</b>Scan a barcode and the product is kept here, so the next scan is instant, even offline.</div>`}`);
+  const pl = $("pl"); if (!pl) return;
+  pl.onclick = e => {
+    const u = e.target.closest("[data-use]"), d = e.target.closest("[data-pdel]");
+    if (u) amountSheet({ ...myFoods[+u.dataset.use], src: "mine" });
+    if (d) { if (d.dataset.armed) { myFoods.splice(+d.dataset.pdel, 1); save(); productsSheet(); } else { d.dataset.armed = 1; d.classList.add("armed"); d.textContent = "Confirm"; } }
+  };
+}
+
+$("openRecipes").onclick = recipesSheet;
+function recipesSheet() {
+  openSheet(`
+    <div class="sh-head"><div><h3>My recipes</h3></div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
+    <button class="cta" id="newRecipe" type="button">New recipe</button>
+    <div class="rlist" id="rl">${recipes.map((r, i) => {
+      const t = r.items.reduce((s, it) => s + kcalOf(it), 0), p = Math.max(1, +r.portions || 1);
+      return `<div class="rrow"><button class="open${r.id === recipe.id ? " cur" : ""}" type="button" data-open="${i}"><b>${esc(r.name || "Untitled recipe")}</b><small class="num">${fmt(t / p)} kcal × ${p} portions</small></button>
+        <button class="mini" type="button" data-rdup="${i}">Copy</button><button class="mini" type="button" data-rdel="${i}">Delete</button></div>`;
+    }).join("")}</div>`);
+  $("newRecipe").onclick = () => {
+    recipe = { id: uid(), name: "New recipe", portions: 4, cooked: "", items: [] };
+    recipes.unshift(recipe); $("plate").value = ""; save(); closeSheet(); render(); $("recipeName").focus(); $("recipeName").select();
+  };
+  $("rl").onclick = e => {
+    const o = e.target.closest("[data-open]"), d = e.target.closest("[data-rdel]"), c = e.target.closest("[data-rdup]");
+    if (o) { recipe = recipes[+o.dataset.open]; $("plate").value = ""; save(); closeSheet(); render(); }
+    if (c) { const src = recipes[+c.dataset.rdup]; recipe = JSON.parse(JSON.stringify(src)); recipe.id = uid(); recipe.name = src.name + " (copy)"; recipes.unshift(recipe); save(); closeSheet(); render(); }
+    if (d) {
+      if (!d.dataset.armed) { d.dataset.armed = 1; d.classList.add("armed"); d.textContent = "Confirm"; return; }
+      const r = recipes.splice(+d.dataset.rdel, 1)[0];
+      if (!recipes.length) recipes.push({ id: uid(), name: "New recipe", portions: 4, cooked: "", items: [] });
+      if (r.id === recipe.id) recipe = recipes[0];
+      save(); render(); recipesSheet();
+    }
+  };
+}
+
+// ---------- Backup, sharing, about
+$("openMenu").onclick = menuSheet;
+function menuSheet() {
+  openSheet(`
+    <div class="sh-head"><div><h3>Backup &amp; sharing</h3><p>${recipes.length} recipe${recipes.length === 1 ? "" : "s"} · ${myFoods.length} product${myFoods.length === 1 ? "" : "s"} saved on this phone</p></div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
+    <p class="prose">Save a backup file now and then. Send it to your partner and they can load it to get your recipes and products.</p>
+    <button class="cta" id="exportBtn" type="button">Save or send a backup</button>
+    <button class="secondary" id="importBtn" type="button">Load a backup file</button>
+    <input type="file" id="importFile" accept=".json,application/json" hidden>
+    <p class="status" id="bkStatus" hidden></p>
+    <p class="prose"><b>Food data.</b> About 220 common UK ingredients, plus 6,000+ foods from the USDA National Nutrient Database (SR28, public domain). Barcodes and shop products come from Open Food Facts (openfoodfacts.org, ODbL), a shared community database.</p>`);
+  $("exportBtn").onclick = async () => {
+    const data = JSON.stringify({ app: "recipe-calorie-counter", v: 1, saved: new Date().toISOString(), recipes, products: myFoods });
+    const name = `calorie-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    const file = new File([data], name, { type: "application/json" });
+    const st = $("bkStatus"); st.hidden = false; st.className = "status";
+    try {
+      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: "Calorie counter backup" }); st.textContent = "Backup shared."; return; }
+    } catch (err) { if (err?.name === "AbortError") { st.hidden = true; return; } }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    st.textContent = "Backup saved to your downloads.";
+  };
+  $("importBtn").onclick = () => { $("importFile").value = ""; $("importFile").click(); };
+  $("importFile").onchange = async e => {
+    const st = $("bkStatus"); st.hidden = false;
+    try {
+      const j = JSON.parse(await e.target.files[0].text());
+      if (j.app !== "recipe-calorie-counter") throw 0;
+      let nr = 0, np = 0;
+      for (const r of j.recipes || []) { const k = recipes.findIndex(x => x.id === r.id); if (k >= 0) recipes[k] = r; else { recipes.push(r); nr++; } }
+      for (const p of j.products || []) { if (!myFoods.some(x => x.id === p.id || (p.code && x.code === p.code))) { myFoods.push(p); np++; } }
+      save(); render();
+      st.className = "status"; st.textContent = `Loaded. ${nr} new recipe${nr === 1 ? "" : "s"} and ${np} new product${np === 1 ? "" : "s"} added; matching recipes were updated.`;
+    } catch { st.className = "status err"; st.textContent = "That file isn't a backup from this app."; }
+  };
+}
+
+render();
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+</body>
+</html>
