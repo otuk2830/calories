@@ -1,7 +1,10 @@
-// Offline support: keeps the app files on the phone. Change VERSION when you upload new files.
-const VERSION = "rcc-v2";
+// Offline support: keeps the app files on the phone.
+// When you upload new files, change VERSION below (rcc-v3 -> rcc-v4 ...) so phones download the update.
+const VERSION = "rcc-v3";
 const FILES = ["./", "index.html", "foods-usda.js", "zxing.min.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
-self.addEventListener("install", e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
+self.addEventListener("install", e => {
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES.map(f => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting()));
+});
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== "rcc-fonts").map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
@@ -18,5 +21,5 @@ self.addEventListener("fetch", e => {
     return;
   }
   if (url.origin !== location.origin) return;
-  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(hit => hit || fetch(e.request).catch(() => caches.match("index.html"))));
+  e.respondWith(caches.open(VERSION).then(c => c.match(e.request, { ignoreSearch: true })).then(hit => hit || fetch(e.request).catch(() => caches.match("index.html"))));
 });

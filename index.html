@@ -197,6 +197,13 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--ink); animation: rot .8s linear infinite; display: inline-block; vertical-align: -3px; margin-right: 8px; }
 @keyframes rot { to { transform: rotate(360deg); } }
 
+.upd { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--chip); border-radius: 16px; padding: 12px 14px; flex-wrap: wrap; }
+.upd b { display: block; font-size: 15px; }
+.upd small { color: var(--muted); font-size: 13px; }
+.upd .pill { background: var(--card); }
+.upd .pill:disabled { opacity: .5; }
+.banner { position: fixed; z-index: 50; left: max(14px, env(safe-area-inset-left, 0px)); right: max(14px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); max-width: 492px; margin: 0 auto; background: var(--ink); color: var(--bg); border-radius: 16px; padding: 12px 12px 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600; font-size: 15px; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+.banner button { background: var(--pop); color: var(--pop-ink); border-radius: 12px; padding: 10px 14px; font-weight: 800; }
 /* Scanner */
 .scanner { position: fixed; inset: 0; z-index: 40; background: #000; color: #fff; display: flex; flex-direction: column; }
 .scanner video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -528,6 +535,7 @@ window.addEventListener("load", () => { loadUSDA(); if ($("q").value) showResult
 const METRIC = ["g", "kg", "oz", "lb"], VOLUME = ["ml", "l", "tsp", "tbsp", "cup"];
 const LABEL = { g: "g", kg: "kg", oz: "oz", lb: "lb", ml: "ml", l: "litre", tsp: "tsp", tbsp: "tbsp", cup: "cup" };
 const RI = 2000;
+const APP_VERSION = "3";
 const ICON_X = `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>`;
 
 const store = {
@@ -983,6 +991,7 @@ function menuSheet() {
     <button class="secondary" id="importBtn" type="button">Load a backup file</button>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
     <p class="status" id="bkStatus" hidden></p>
+    <div class="upd"><div><b>App version ${APP_VERSION}</b><small id="updMsg">Updates install by themselves when you're online.</small></div><button class="pill" id="updBtn" type="button">Check for updates</button></div>
     <p class="prose"><b>Food data.</b> About 220 common UK ingredients, plus 6,000+ foods from the USDA National Nutrient Database (SR28, public domain). Barcodes and shop products come from Open Food Facts (openfoodfacts.org, ODbL), a shared community database.</p>`);
   $("exportBtn").onclick = async () => {
     const data = JSON.stringify({ app: "recipe-calorie-counter", v: 1, saved: new Date().toISOString(), recipes, products: myFoods });
@@ -996,6 +1005,7 @@ function menuSheet() {
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     st.textContent = "Backup saved to your downloads.";
   };
+  $("updBtn").onclick = checkForUpdate;
   $("importBtn").onclick = () => { $("importFile").value = ""; $("importFile").click(); };
   $("importFile").onchange = async e => {
     const st = $("bkStatus"); st.hidden = false;
@@ -1012,7 +1022,37 @@ function menuSheet() {
 }
 
 render();
-if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+// ---------- Updates
+let swReg = null;
+const hadController = !!navigator.serviceWorker?.controller;
+function showUpdateBanner() {
+  if ($("updBanner")) return;
+  const d = document.createElement("div"); d.id = "updBanner"; d.className = "banner";
+  d.innerHTML = `<span>A new version is ready.</span><button type="button" id="updReload">Update now</button>`;
+  document.body.appendChild(d);
+  $("updReload").onclick = () => location.reload();
+}
+async function checkForUpdate() {
+  const msg = $("updMsg"), btn = $("updBtn");
+  if (!swReg) { msg.textContent = "Updates work once the app is opened from its web address (https)."; return; }
+  if (!navigator.onLine) { msg.textContent = "You're offline. Connect to the internet and try again."; return; }
+  btn.disabled = true; msg.textContent = "Checking…";
+  try {
+    await swReg.update();
+    const w = swReg.installing || swReg.waiting;
+    if (w) { msg.textContent = "Downloading the new version…"; }
+    else { msg.textContent = "You have the latest version."; btn.disabled = false; }
+  } catch { msg.textContent = "Couldn't check right now. Try again later."; btn.disabled = false; }
+}
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
+  navigator.serviceWorker.register("sw.js").then(r => { swReg = r; }).catch(() => {});
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) return;
+    const busy = !$("scrim").hidden || !$("scanner").hidden || document.activeElement?.tagName === "INPUT";
+    if (busy) showUpdateBanner(); else location.reload();
+  });
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && navigator.onLine) swReg?.update().catch(() => {}); });
+}
 })();
 </script>
 </body>

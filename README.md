@@ -7,7 +7,7 @@ Upload ALL of these to the same GitHub repository, in the top level (not inside 
 index.html, sw.js, manifest.webmanifest, foods-usda.js, zxing.min.js, icon-192.png, icon-512.png, apple-touch-icon.png
 
 ## Updating later
-If you change any file, also open sw.js and change `rcc-v1` to `rcc-v2` (then v3, ...), so phones pick up the new version.
+If you change any file, also upload the new sw.js (its VERSION line must change, e.g. rcc-v3 -> rcc-v4). Phones then update by themselves next time the app is opened online, or via ⋯ -> Check for updates.
 Recipes saved on the phones are not affected by updates.
 
 ## Data sources
