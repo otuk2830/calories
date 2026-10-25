@@ -1,6 +1,6 @@
 // Offline support: keeps the app files on the phone.
-// When you upload new files, change VERSION below (rcc-v3 -> rcc-v4 ...) so phones download the update.
-const VERSION = "rcc-v3";
+// When you upload new files, change VERSION below (rcc-v5 -> rcc-v6 ...) so phones download the update.
+const VERSION = "rcc-v5";
 const FILES = ["./", "index.html", "foods-usda.js", "zxing.min.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES.map(f => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting()));
