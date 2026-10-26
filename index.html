@@ -898,7 +898,7 @@ window.addEventListener("load", () => { loadUSDA(); if ($("q").value) showResult
 const METRIC = ["g", "kg", "oz", "lb"], VOLUME = ["ml", "l", "tsp", "tbsp", "cup"];
 const LABEL = { g: "g", kg: "kg", oz: "oz", lb: "lb", ml: "ml", l: "litre", tsp: "tsp", tbsp: "tbsp", cup: "cup" };
 const RI = 2000;
-const APP_VERSION = "19";
+const APP_VERSION = "20";
 let usage = (() => { try { return JSON.parse(localStorage.getItem("rcc.usage")) || {}; } catch { return {}; } })();
 function bumpUsage(f) { if (!f || f.src === "recipe") return; usage[f.name] = (usage[f.name] || 0) + 1; try { localStorage.setItem("rcc.usage", JSON.stringify(usage)); } catch {} }
 let addTarget = { kind: "none" };
@@ -2092,24 +2092,37 @@ $("openSet4").onclick = settingsSheet;
 function menuSheet() {
   openSheet(`
     <div class="sh-head"><div><h3>Backup &amp; sharing</h3><p>${recipes.length} recipe${recipes.length === 1 ? "" : "s"} · ${myFoods.length} product${myFoods.length === 1 ? "" : "s"} saved on this phone</p></div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
-    <p class="prose">Save a backup file now and then. It has your recipes, products, diary, weight and goals. Send it to your partner and they can load it too.</p>
-    <button class="cta" id="exportBtn" type="button">Save or send a backup</button>
-    <button class="secondary" id="importBtn" type="button">Load a backup file</button>
+    <h4 class="ph">Share with someone</h4>
+    <p class="prose">Only your <b>${(n => `${n} recipe${n === 1 ? "" : "s"}`)(recipes.filter(r => r.items.length && !/\(example\)$/.test(r.name || "")).length)}</b> and <b>${myFoods.length} product${myFoods.length === 1 ? "" : "s"}</b>. No diary, weight or goals, so the other person starts with their own.</p>
+    <button class="cta" id="shareBtn" type="button">Share recipes &amp; products</button>
+    <h4 class="ph">Full backup</h4>
+    <p class="prose">Everything: recipes, products, diary, weight and goals. Keep one now and then in case you change phone.</p>
+    <button class="secondary" id="exportBtn" type="button">Save a full backup</button>
+    <h4 class="ph">Load a file</h4>
+    <p class="prose">Works with both kinds of file. It adds to what's already on this phone and never deletes anything.</p>
+    <button class="secondary" id="importBtn" type="button">Load a backup or shared file</button>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
     <p class="status" id="bkStatus" hidden></p>
     <div class="upd"><div><b>App version ${APP_VERSION}</b><small id="updMsg">Updates install by themselves when you're online.</small></div><button class="pill" id="updBtn" type="button">Check for updates</button></div>
     <p class="prose"><b>Food data.</b> About 220 common UK ingredients, plus 6,000+ foods from the USDA National Nutrient Database (SR28, public domain). Barcodes and shop products come from Open Food Facts (openfoodfacts.org, ODbL), a shared community database.</p>`);
-  $("exportBtn").onclick = async () => {
-    const data = JSON.stringify({ app: "recipe-calorie-counter", v: 2, saved: new Date().toISOString(), recipes, products: myFoods, diary, weights, goals, profile });
-    const name = `calorie-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    const file = new File([data], name, { type: "application/json" });
+  const sendFile = async (obj, name, title, doneMsg) => {
+    const file = new File([JSON.stringify(obj)], name, { type: "application/json" });
     const st = $("bkStatus"); st.hidden = false; st.className = "status";
     try {
-      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: "Calorie counter backup" }); st.textContent = "Backup shared."; return; }
+      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title }); st.textContent = doneMsg; return; }
     } catch (err) { if (err?.name === "AbortError") { st.hidden = true; return; } }
     const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    st.textContent = "Backup saved to your downloads.";
+    st.textContent = "Saved to your downloads.";
+  };
+  const day = new Date().toISOString().slice(0, 10);
+  $("exportBtn").onclick = () => sendFile({ app: "recipe-calorie-counter", v: 2, kind: "backup", saved: new Date().toISOString(), recipes, products: myFoods, diary, weights, goals, profile },
+    `calorie-backup-${day}.json`, "Calorie counter backup", "Backup shared.");
+  $("shareBtn").onclick = () => {
+    const shareRecipes = recipes.filter(r => r.items.length && !/\(example\)$/.test(r.name || "")).map(r => { const { fav, ...rest } = r; return rest; });
+    const shareProducts = myFoods.map(f => { const { note, ...rest } = f; return rest; });
+    sendFile({ app: "recipe-calorie-counter", v: 2, kind: "share", saved: new Date().toISOString(), recipes: shareRecipes, products: shareProducts },
+      `recipes-and-products-${day}.json`, "My recipes and products", "Recipes and products shared.");
   };
   $("updBtn").onclick = checkForUpdate;
   $("importBtn").onclick = () => { $("importFile").value = ""; $("importFile").click(); };
@@ -2130,7 +2143,7 @@ function menuSheet() {
       if (!profile?.age && j.profile) { profile = j.profile; store.set("rcc.profile", profile); }
       store.set("rcc.weights", weights); saveDiary();
       save(); if (!$("editor").hidden) render(); else if (tab === "recipes") renderHome(); else if (tab === "today") renderToday(); else if (tab === "progress") renderProgress(); else renderProductsTab();
-      st.className = "status"; st.textContent = `Loaded. ${nr} new recipe${nr === 1 ? "" : "s"} and ${np} new product${np === 1 ? "" : "s"} added; matching recipes were updated.`;
+      st.className = "status ok"; st.textContent = `Loaded ${j.kind === "share" ? "shared file" : "backup"}: ${nr} new recipe${nr === 1 ? "" : "s"} and ${np} new product${np === 1 ? "" : "s"} added${j.kind === "share" ? "." : ", plus diary, weight and goals where this phone had none."}`;
     } catch { st.className = "status err"; st.textContent = "That file isn't a backup from this app."; }
   };
 }
