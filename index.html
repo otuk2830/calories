@@ -9,6 +9,29 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Calories">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script>
+// Colours and theme (runs before the page draws, so there's no flash)
+window.PALETTES = {
+  classic:  { name: "Night & sun",   light: { hero: "#1B1E3C", pop: "#FFC83A", bar: "#F0B400" }, dark: { hero: "#252A57", pop: "#FFD35E", bar: "#FFD35E" } },
+  ocean:    { name: "Kitten blue",   light: { hero: "#0E3A55", pop: "#8FD6F5", bar: "#2E9BD0" }, dark: { hero: "#174B6B", pop: "#A5E0F8", bar: "#8FD6F5" } },
+  berry:    { name: "Berry",         light: { hero: "#3B1631", pop: "#FF9EC0", bar: "#DB4F84" }, dark: { hero: "#52203F", pop: "#FFB3CE", bar: "#FF9EC0" } },
+  forest:   { name: "Forest",        light: { hero: "#12352A", pop: "#9BE3B4", bar: "#2C9E61" }, dark: { hero: "#1B4838", pop: "#AEEBC3", bar: "#9BE3B4" } },
+  sunset:   { name: "Sunset",        light: { hero: "#3E1D12", pop: "#FFA26B", bar: "#EC7428" }, dark: { hero: "#55291A", pop: "#FFB585", bar: "#FFA26B" } },
+  lavender: { name: "Lavender",      light: { hero: "#2B2452", pop: "#C9BBFF", bar: "#8269EE" }, dark: { hero: "#3B326E", pop: "#D6CBFF", bar: "#C9BBFF" } }
+};
+window.applyTheme = function () {
+  let theme = "auto", pal = "classic";
+  try { theme = localStorage.getItem("rcc.theme") || "auto"; pal = localStorage.getItem("rcc.palette") || "classic"; } catch (e) {}
+  const root = document.documentElement;
+  if (theme === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", theme);
+  const dark = theme === "dark" || (theme === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  const P = (PALETTES[pal] || PALETTES.classic)[dark ? "dark" : "light"];
+  root.style.setProperty("--hero", P.hero); root.style.setProperty("--pop", P.pop); root.style.setProperty("--bar", P.bar);
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", dark ? "#0D0E16" : "#F2F2F6");
+};
+applyTheme();
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (e) {}
+</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -28,12 +51,18 @@
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0D0E16; --card: #171927; --ink: #ECEDF6; --muted: #9B9EB5; --line: #272A3B;
     --hero: #252A57; --hero-ink: #F4F4FA; --hero-muted: #B4B7D6; --pop: #FFD35E; --pop-ink: #1B1E3C;
     --bar: #FFD35E; --chip: #222537; --danger: #FF8A73; --shadow: none; color-scheme: dark;
     --pro: #FF7D6B; --carb: #FFD35E; --fat: #8EA2FF;
   }
+}
+:root[data-theme="dark"] {
+    --bg: #0D0E16; --card: #171927; --ink: #ECEDF6; --muted: #9B9EB5; --line: #272A3B;
+    --hero: #252A57; --hero-ink: #F4F4FA; --hero-muted: #B4B7D6; --pop: #FFD35E; --pop-ink: #1B1E3C;
+    --bar: #FFD35E; --chip: #222537; --danger: #FF8A73; --shadow: none; color-scheme: dark;
+    --pro: #FF7D6B; --carb: #FFD35E; --fat: #8EA2FF;
 }
 [hidden] { display: none !important; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -54,7 +83,7 @@ input[type=number] { -moz-appearance: textfield; }
 input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
 .hero { background: var(--hero); color: var(--hero-ink); border-radius: 26px; padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 16px; position: relative; overflow: hidden; }
-.hero::after { content: ""; position: absolute; right: -60px; top: -60px; width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, rgba(255,200,58,.22), transparent 70%); pointer-events: none; }
+.hero::after { content: ""; position: absolute; right: -60px; top: -60px; width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--pop) 24%, transparent), transparent 70%); pointer-events: none; }
 .hero-top { display: flex; align-items: center; gap: 8px; position: relative; z-index: 1; }
 #recipeName { flex: 1; min-width: 0; font-family: var(--serif); font-size: 22px; line-height: 1.2; background: transparent; border: 0; color: inherit; padding: 4px 0; text-overflow: ellipsis; }
 #recipeName:focus { outline: none; border-bottom: 1px solid var(--hero-muted); }
@@ -163,7 +192,7 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .links { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
 .foot { text-align: center; font-size: 12px; color: var(--muted); margin: 0; }
 
-.scrim { position: fixed; inset: 0; z-index: 30; background: rgba(10,11,20,.5); display: flex; align-items: flex-end; justify-content: center; }
+.scrim { position: fixed; left: 0; right: 0; top: var(--vvtop, 0px); height: var(--vvh, 100%); z-index: 30; background: rgba(10,11,20,.5); display: flex; align-items: flex-end; justify-content: center; }
 .sheet {
   width: 100%; max-width: 520px; max-height: 92%; overflow: auto; background: var(--card); border-radius: 26px 26px 0 0;
   padding: 10px max(18px, env(safe-area-inset-right, 0px)) calc(22px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px));
@@ -175,6 +204,10 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 @keyframes up { from { transform: translateY(40px); opacity: .4; } }
 .sheet > * { flex-shrink: 0; }
 .chips button { flex: none; }
+.sheet.tall { height: 92%; overflow: hidden; }
+.sheet.tall #pres { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 14px; margin: 0 -4px; padding: 0 4px 8px; }
+.sheet.tall #pres > * { flex-shrink: 0; }
+html.locked, html.locked body { overflow: hidden; }
 .grab { width: 40px; height: 5px; border-radius: 5px; background: var(--line); margin: 0 auto 2px; }
 .sh-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .sh-head h3 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 22px; line-height: 1.2; overflow-wrap: anywhere; }
@@ -317,6 +350,27 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .toggle input { width: 22px; height: 22px; margin: 2px 0 0; accent-color: var(--ink); flex: none; }
 .toggle b { display: block; font-size: 15px; }
 .toggle small { color: var(--muted); font-size: 13px; }
+.savebtn { display: inline-flex; align-items: center; gap: 6px; background: var(--pop); color: var(--pop-ink); border-radius: 999px; padding: 10px 18px 10px 14px; font-weight: 800; font-size: 16px; box-shadow: var(--shadow); }
+.savebtn svg { width: 20px; height: 20px; }
+.toast { position: fixed; z-index: 60; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); border-radius: 999px; padding: 12px 20px; font-weight: 700; font-size: 15px; box-shadow: 0 8px 30px rgba(0,0,0,.25); white-space: nowrap; max-width: calc(100% - 32px); overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: no-preference) { .toast { animation: toastin .2s ease-out; } }
+@keyframes toastin { from { opacity: 0; transform: translate(-50%, 10px); } }
+.addmac { margin-top: 8px; font-size: 13px; font-weight: 800; color: var(--danger); background: var(--chip); border-radius: 999px; padding: 6px 12px; }
+.nomac { color: var(--danger); font-weight: 700; }
+.onl:empty { display: none; }
+.ostatus { margin: 0; padding: 10px 14px; font-size: 14px; color: var(--muted); }
+#results .onl .results { border: 0; box-shadow: none; border-radius: 0; border-top: 1px solid var(--line); }
+#results .onl .ph { padding: 12px 14px 0; margin: 0; }
+.swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.swatches button { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 6px; border-radius: 16px; background: var(--chip); border: 2px solid transparent; font-size: 13px; font-weight: 700; }
+.swatches button[aria-pressed="true"] { border-color: var(--ink); }
+.sw { width: 44px; height: 44px; border-radius: 50%; position: relative; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.sw i { position: absolute; inset: 0 0 0 50%; }
+.setrow { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; background: var(--chip); border-radius: 16px; padding: 14px; }
+.setrow .ic { width: 40px; height: 40px; border-radius: 12px; background: var(--pop); color: var(--pop-ink); display: grid; place-items: center; flex: none; }
+.setrow .ic svg { width: 22px; height: 22px; }
+.setrow b { display: block; font-size: 16px; }
+.setrow small { color: var(--muted); font-size: 13px; }
 /* Scanner */
 .scanner { position: fixed; inset: 0; z-index: 40; background: #000; color: #fff; display: flex; flex-direction: column; }
 .scanner video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -383,6 +437,7 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 <main class="app" id="editor" hidden>
   <div class="topbar">
     <button class="back" id="backBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>My recipes</button>
+    <button class="savebtn" id="saveRecipe" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Save</button>
   </div>
   <section class="hero" aria-label="Calories per portion">
     <div class="hero-top">
@@ -470,7 +525,7 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 </main>
 
 <main class="app" id="products" hidden>
-  <div class="topbar"><div class="brand"><div><h1>My products</h1><small>Scanned, found online or typed from labels</small></div></div></div>
+  <div class="topbar"><div class="brand"><div><h1>My products</h1><small>Tap a product to edit it or add its macros</small></div></div></div>
   <button class="newbig" id="plabel2" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add from a label</button>
   <section class="panel"><div class="rlist" id="plist"></div></section>
 </main>
@@ -726,10 +781,89 @@ Red wine|85|0.99|||0.1|2.6|0|0
 White wine|82|0.99|||0.1|2.6|0|0
 Beer|43|1|||0.5|3.6|0|0
 Water|0|1|||0|0|0|0`;
+const BRANDS_RAW = `Coca-Cola Original Taste|42|1.04|330|can|0|10.6|0|0|coke;coca cola;cocacola;cola
+Coca-Cola Zero Sugar|0.2|1|330|can|0|0|0|0|coke zero;coca cola zero;zero coke;cola zero
+Diet Coke|0.4|1|330|can|0|0|0|0|coke diet;coca cola diet;coke light
+Pepsi Max|0.4|1|330|can|0|0|0|0|pepsi;pepsi zero
+Fanta Orange|19|1.03|330|can|0|4.6|0|0|fanta
+Sprite|14|1.02|330|can|0|3.3|0|0|sprite;lemonade
+Irn-Bru|20|1.03|330|can|0|4.7|0|0|irn bru;irnbru
+Red Bull Energy Drink|46|1.04|250|can|0|11|0|0|redbull;energy drink
+Red Bull Sugarfree|3|1|250|can|0|0|0|0|redbull sugar free;red bull zero
+Monster Energy (green)|47|1.04|500|can|0|11|0|0|monster;energy drink
+Monster Energy Ultra (zero sugar)|2|1|500|can|0|0.9|0|0|monster ultra;monster white;monster zero
+Orange juice, not from concentrate|45|1.04|150|glass|0.7|10|0|0.3|tropicana;orange juice;oj
+Alpro Soya Original|39|1.03|250|glass|3|2.5|1.8|0.5|alpro;soya milk;soy milk
+Alpro Oat Original|44|1.03|250|glass|0.3|6.8|1.5|0.8|alpro oat;oat milk
+Oatly Barista Edition|59|1.03|250|glass|1|6.6|3|0.8|oatly;oat milk barista
+Cadbury Dairy Milk|534|1|45|bar|7.3|57|30|2.1|dairy milk;cadbury;chocolate bar
+KitKat 4 Finger|518|1|41.5|bar|6.7|61|26|2|kit kat;kitkat;nestle
+Mars Bar|449|1|51|bar|4|70|16.6|1|mars
+Snickers|481|1|48|bar|8.6|59|23|2|snickers
+Twix|495|1|50|twin bar|4.5|64|24|1.5|twix
+Maltesers|500|1|37|bag|8|61|24|1|maltesers
+Galaxy Smooth Milk|544|1|42|bar|6.3|57|32|1.5|galaxy chocolate
+Walkers Ready Salted crisps|527|1|25|bag|6.4|51|33|4.5|walkers;crisps;ready salted;chips
+Walkers Cheese & Onion crisps|522|1|25|bag|6.3|51|32|4.5|walkers cheese onion;crisps
+Pringles Original|529|1|25|portion|4.5|50|34|3|pringles;crisps
+McVitie's Digestive|483|1|14.7|biscuit|7.1|62.7|21|3.6|digestive;mcvities;biscuit
+McVitie's Milk Chocolate Digestive|496|1|16.6|biscuit|6.7|62|24|2.9|chocolate digestive;mcvities chocolate
+Jaffa Cakes|376|1|12.2|cake|4.3|70|8|2|jaffa;mcvities jaffa
+Oreo|476|1|11|biscuit|5|69|20|2.7|oreo;cookie
+Nutella|539|1.2|15|tbsp|6.3|57.5|30.9|0|nutella;hazelnut spread
+Lotus Biscoff biscuit|484|1|7.8|biscuit|4.9|72.6|19|1.3|biscoff;lotus
+Weetabix|362|1|18.8|biscuit|12|69|2|10|weetabix;cereal
+Kellogg's Corn Flakes|378|0.12|30|bowl|7|84|0.9|3|cornflakes;kelloggs;cereal
+Kellogg's Special K Original|379|0.12|30|bowl|9.5|79|1.5|2.5|special k;kelloggs;cereal
+Shreddies|371|0.2|40|bowl|10|69|2|10|shreddies;cereal
+Quaker Oat So Simple Original sachet|375|1|27|sachet|11|58|8.5|9|oat so simple;porridge sachet;quaker
+Warburtons Medium White bread|240|1|40|slice|9|45|1.8|2.4|warburtons;white bread;toast
+Hovis Wholemeal bread|227|1|40|slice|10|38|2.5|7|hovis;brown bread;wholemeal
+Philadelphia Original|225|1|30|portion|5.4|4|21|0.2|philadelphia;cream cheese;philly
+Philadelphia Light|152|1|30|portion|7.4|5.5|11|0.3|philadelphia light;philly light
+Lurpak Spreadable|709|0.96|10|portion|0.5|0.5|78|0|lurpak;butter
+Lurpak Butter (block)|736|0.96|10|portion|0.6|0.6|81|0|lurpak butter
+Heinz Baked Beanz|78|1.05|415|tin|4.7|12.5|0.2|3.8|heinz beans;baked beans;beanz
+Heinz Tomato Ketchup|102|1.15|15|tbsp|1.2|23.2|0.1|0.4|heinz ketchup;ketchup
+Hellmann's Real Mayonnaise|721|0.95|15|tbsp|1.1|1.3|79|0|hellmanns;mayo;mayonnaise
+Hellmann's Light Mayonnaise|263|0.95|15|tbsp|0.7|7|26|0|hellmanns light;light mayo
+Fage Total 0% Greek yogurt|54|1.05|170|pot|10.3|3|0|0|fage;greek yogurt 0;yoghurt
+Fage Total 5% Greek yogurt|93|1.05|170|pot|9|3|5|0|fage 5;greek yogurt;yoghurt
+Skyr natural (Arla)|63|1.05|150|pot|11|4|0.2|0|skyr;arla;yoghurt
+Müller Corner Strawberry|108|1.05|124|pot|3.7|16|3.1|0.3|muller corner;yoghurt
+Müllerlight Vanilla|50|1.05|160|pot|4.3|7.1|0.1|0|muller light;mullerlight;yoghurt
+Activia Natural|67|1.05|120|pot|4.3|6|3|0|activia;yoghurt
+Babybel Original|305|1|20|cheese|22|0|24|0|babybel;cheese
+Dairylea Triangles|234|1|17.5|triangle|9|6.5|19|0|dairylea;cheese spread
+Quorn Pieces|103|1|75|portion|14|4.5|2.6|5.5|quorn chicken;quorn pieces
+Whey protein powder, unflavoured|412|0.4|25|scoop|82|4|7.5|0|whey;protein powder;myprotein;impact whey
+Ben's Original Basmati microwave rice|153|1|250|pouch|3.6|31|1.6|0.9|bens rice;uncle bens;microwave rice;express rice
+Tilda Basmati microwave rice|150|1|250|pouch|3.3|31|1.4|0.8|tilda;microwave rice
+Dolmio Bolognese Original sauce|42|1.05|125|portion|1.4|7|0.3|1.4|dolmio;pasta sauce;bolognese sauce
+Pot Noodle Chicken & Mushroom|448|1|90|pot (dry)|9|60|18|3|pot noodle;instant noodles
+Super Noodles Chicken (dry)|470|1|90|pack|9.5|60|21|3|super noodles;instant noodles
+Hummus (supermarket, classic)|300|1|30|tbsp|7|9|25|5|houmous;humus
+Haribo Starmix|343|1|30|portion|6.6|77|0.5|0|haribo;sweets;gummy
+Ben & Jerry's Cookie Dough|270|0.6|100|scoop|4|31|14|0.5|ben and jerrys;ice cream
+Magnum Classic|268|1|79|stick|3.3|26|17|0|magnum;ice cream
+Greggs Sausage Roll|346|1|101|roll|9|23|24|1.5|greggs;sausage roll
+Croissant (all butter)|421|1|60|croissant|8|45|23|2|croissant`;
 const CORE = RAW.split("\n").map(l => {
   const [name, k, d, p, pl, pr, cb, ft, fb] = l.split("|");
   return { name, kcal: +k, d: +d || 1, m: +p ? [[pl || "piece", +p]] : [], p: +pr, c: +cb, f: +ft, fb: +fb, src: "core" };
 });
+const BRANDS = BRANDS_RAW.split("\n").filter(Boolean).map(l => {
+  const [name, k, d, p, pl, pr, cb, ft, fb, al] = l.split("|");
+  return { name, kcal: +k, d: +d || 1, m: +p ? [[pl || "piece", +p]] : [], p: +pr, c: +cb, f: +ft, fb: +fb, al: (al || "").split(";").filter(Boolean), src: "core" };
+});
+// Words people use for the same food (UK and US names, slang)
+const SYN = [["coke", "cola", "coca"], ["aubergine", "eggplant"], ["courgette", "zucchini"], ["coriander", "cilantro"], ["chickpea", "garbanzo"],
+  ["spring onion", "scallion", "green onion"], ["prawn", "shrimp"], ["sweets", "candies", "candy"], ["biscuit", "cookie"], ["chips", "fries", "french fried"],
+  ["crisps", "potato chips"], ["mince", "ground"], ["rocket", "arugula"], ["swede", "rutabaga"], ["beetroot", "beet"], ["porridge", "oatmeal", "oats"],
+  ["yoghurt", "yogurt"], ["jam", "jelly", "preserves"], ["mangetout", "snow pea"], ["minced", "ground"], ["squash", "cordial"],
+  ["jacket potato", "baked potato"], ["sultana", "raisin"], ["icing sugar", "powdered sugar"], ["double cream", "heavy cream"], ["single cream", "light cream"],
+  ["plain flour", "all-purpose flour", "wheat flour"], ["bacon", "rasher"], ["gammon", "ham"], ["pak choi", "bok choy"], ["butternut", "squash"]];
+const SYNMAP = new Map(); for (const g of SYN) for (const w of g) SYNMAP.set(w, [...new Set([...(SYNMAP.get(w) || []), ...g])]);
 let USDA = [];
 const loadUSDA = () => { if (!USDA.length && Array.isArray(self.USDA)) USDA = self.USDA.map(e => ({ name: e[0], kcal: e[1], p: e[2], c: e[3], f: e[4], fb: e[5], d: e[6] || 0, m: e[7] || [], src: "usda" })); };
 window.addEventListener("load", () => { loadUSDA(); if ($("q").value) showResults(); });
@@ -737,7 +871,7 @@ window.addEventListener("load", () => { loadUSDA(); if ($("q").value) showResult
 const METRIC = ["g", "kg", "oz", "lb"], VOLUME = ["ml", "l", "tsp", "tbsp", "cup"];
 const LABEL = { g: "g", kg: "kg", oz: "oz", lb: "lb", ml: "ml", l: "litre", tsp: "tsp", tbsp: "tbsp", cup: "cup" };
 const RI = 2000;
-const APP_VERSION = "10";
+const APP_VERSION = "14";
 let usage = (() => { try { return JSON.parse(localStorage.getItem("rcc.usage")) || {}; } catch { return {}; } })();
 function bumpUsage(f) { if (!f || f.src === "recipe") return; usage[f.name] = (usage[f.name] || 0) + 1; try { localStorage.setItem("rcc.usage", JSON.stringify(usage)); } catch {} }
 let addTarget = { kind: "none" };
@@ -820,7 +954,7 @@ function render() {
   $("count").textContent = recipe.items.length ? `${recipe.items.length} item${recipe.items.length === 1 ? "" : "s"}` : "";
   $("items").innerHTML = recipe.items.length ? recipe.items.map((it, i) => {
     const k = kcalOf(it);
-    const mm = it.p == null ? "No macro data" : `<i>P</i> ${g1(macro(it, "p"))} · <i>C</i> ${g1(macro(it, "c"))} · <i>F</i> ${g1(macro(it, "f"))} g`;
+    const mm = it.p == null ? `<span class="nomac">No macros · tap to add</span>` : `<i>P</i> ${g1(macro(it, "p"))} · <i>C</i> ${g1(macro(it, "c"))} · <i>F</i> ${g1(macro(it, "f"))} g`;
     return `<button class="ing" type="button" data-i="${i}">
       <span class="nm">${esc(it.name)}</span>
       <span class="kc num">${fmt(k)}<small>kcal</small></span>
@@ -850,7 +984,7 @@ function totals() {
   }
   $("bP").style.width = (eP / eSum * 100) + "%"; $("bC").style.width = (eC / eSum * 100) + "%"; $("bF").style.width = (eF / eSum * 100) + "%";
   const foot = $("mFoot");
-  if (T.missing.length) { foot.className = "mfoot warn"; foot.textContent = `No macro data for ${T.missing.join(", ")}. Totals leave it out. Tap it and re-add it from the search to fix.`; }
+  if (T.missing.length) { foot.className = "mfoot warn"; foot.textContent = `No macros for ${T.missing.join(", ")}, so the totals leave it out. Tap it in the list and choose "Add them".`; }
   else { foot.className = "mfoot num"; foot.textContent = recipe.items.length ? `Fibre ${g1(T.fb / div)} g ${mmode === "portion" ? `per portion · whole recipe P ${fmt(T.p)} · C ${fmt(T.c)} · F ${fmt(T.f)} g` : `· ${p} portion${p === 1 ? "" : "s"}`}` : ""; }
   // plate
   const plate = +$("plate").value || 0;
@@ -877,13 +1011,22 @@ const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const STEM = w => w.length > 3 ? w.replace(/(ies|es|s)$/, m => m === "ies" ? "y" : "") : w;
 function search(q) {
   loadUSDA();
-  const words = norm(q).split(/[\s,]+/).filter(Boolean).map(STEM);
-  if (!words.length) return [];
+  const nq = norm(q).replace(/[-']/g, " ").trim();
+  if (!nq) return [];
+  // whole-phrase synonyms first (e.g. "spring onion"), then single words
+  let text = nq; const groups = [];
+  for (const [k, alts] of SYNMAP) if (k.includes(" ") && text.includes(k)) { groups.push([k, ...alts.filter(a => a !== k).map(a => norm(a))]); text = text.replace(k, " "); }
+  for (const w of text.split(/[\s,]+/).filter(Boolean)) { const st = STEM(w); groups.push([st, ...[...new Set((SYNMAP.get(w) || SYNMAP.get(st) || []).map(a => STEM(norm(a))))].filter(a => a !== st)]); }
+  if (!groups.length) return [];
+  const words = groups.map(g => g[0]);
   const out = [];
-  const pools = [[myFoods.map(f => ({ ...f, src: "mine" })), -30], [CORE, -20], [USDA, 0]];
+  const pools = [[myFoods.map(f => ({ ...f, src: "mine" })), -30], [BRANDS, -24], [CORE, -20], [USDA, 0]];
   for (const [pool, bonus] of pools) for (const f of pool) {
-    const n = norm(f.name); if (!words.every(w => n.includes(w))) continue;
-    let s = bonus + n.length / 40;
+    const n = norm(f.name).replace(/[-']/g, " "), hay = f.al ? n + " | " + f.al.map(norm).join(" | ") : (f.brand ? n + " | " + norm(f.brand) : n);
+    const sp = " " + hay.replace(/[^a-z0-9| ]/g, " ") + " ";
+    if (!groups.every(g => hay.includes(g[0]) || g.slice(1).some(w => sp.includes(" " + w + " ") || sp.includes(" " + w + "s ") || sp.includes(" " + w + "es ")))) continue;
+    let s = bonus + (pool === BRANDS ? BRANDS.indexOf(f) * 0.02 : n.length / 40);
+    if (f.al) { const al = f.al.map(norm); if (al.includes(nq)) s -= 12; else if (al.some(a => a.startsWith(nq))) s -= 6; }
     const u = usage[f.name] || 0; if (u) s -= 25 + Math.min(u, 30);
     const first = n.split(/[\s,]+/)[0];
     if (first.startsWith(words[0])) s -= 6;
@@ -891,6 +1034,40 @@ function search(q) {
     out.push({ f, s });
   }
   return out.sort((a, b) => a.s - b.s).slice(0, 30).map(x => x.f);
+}
+
+// ---------- Live shop search (Open Food Facts), shown under the results
+const onlineCache = new Map();
+let onlineTimer = 0, onlineCtl = null;
+function onlineBlock(q, holderId, onPick) {
+  const holder = $(holderId); if (!holder) return;
+  clearTimeout(onlineTimer); onlineCtl?.abort();
+  if (q.length < 3) { holder.innerHTML = ""; return; }
+  const render = list => {
+    const h = $(holderId); if (!h) return;
+    if (!list.length) { h.innerHTML = `<p class="ostatus">No shop products found for “${esc(q)}”.</p>`; return; }
+    h.innerHTML = `<h4 class="ph">Shop products</h4><div class="results">${list.map((f, i) => `<button class="r" type="button" data-on="${i}"><span class="nm">${esc(f.name)}<span class="tag">Shop</span>${f.brand ? `<small>${esc(f.brand)}${f.m.length ? ` · ${fmt(f.m[0][1])} g pack` : ""}</small>` : ""}</span><span class="kc num">${fmt(f.kcal)} kcal</span></button>`).join("")}</div>`;
+    h.onclick = e => { const b = e.target.closest("[data-on]"); if (!b) return; const f = { ...list[+b.dataset.on], id: uid() }; rememberProduct(f); onPick(f); };
+  };
+  if (onlineCache.has(q)) { render(onlineCache.get(q)); return; }
+  if (!navigator.onLine) { holder.innerHTML = `<p class="ostatus">You're offline, so shop products aren't searched.</p>`; return; }
+  holder.innerHTML = `<p class="ostatus"><span class="spin"></span>Searching shop products…</p>`;
+  onlineTimer = setTimeout(async () => {
+    const ctl = onlineCtl = new AbortController();
+    const base = "search_simple=1&action=process&json=1&page_size=24&sort_by=unique_scans_n&fields=" + OFF_FIELDS + "&search_terms=" + encodeURIComponent(q);
+    const get = async host => { const r = await fetch(`https://${host}.openfoodfacts.org/cgi/search.pl?` + base, { signal: ctl.signal }); if (!r.ok) throw 0; return (await r.json()).products || []; };
+    try {
+      let list = (await get("uk")).map(p => fromOFF(p)).filter(Boolean);
+      if (list.length < 6) { const seen = new Set(list.map(f => f.code)); list.push(...(await get("world")).map(p => fromOFF(p)).filter(f => f && !seen.has(f.code))); }
+      const mine = new Set(myFoods.map(f => f.code).filter(Boolean));
+      list = list.filter(f => !mine.has(f.code)).slice(0, 15);
+      onlineCache.set(q, list);
+      if (!ctl.signal.aborted) render(list);
+    } catch (e) {
+      if (ctl.signal.aborted) return;
+      const h = $(holderId); if (h) h.innerHTML = `<p class="ostatus">Shop search didn't answer. Try again in a moment.</p>`;
+    }
+  }, 550);
 }
 let lastRes = [];
 function showResults() {
@@ -900,8 +1077,10 @@ function showResults() {
   lastRes = search(q);
   const tag = f => f.src === "mine" ? `<span class="tag mine">Mine</span>` : f.src === "usda" ? `<span class="tag">USDA</span>` : "";
   box.innerHTML = lastRes.map((f, i) => `<button class="r" type="button" data-r="${i}"><span class="nm">${esc(f.name)}${tag(f)}${f.brand ? `<small>${esc(f.brand)}</small>` : ""}</span><span class="kc num">${fmt(f.kcal)} kcal</span></button>`).join("") +
-    (q.length < 3 ? "" : `<div class="more">${lastRes.length ? "" : `<span class="notice" style="width:100%;padding:0 0 4px">Nothing on this phone matches.</span>`}<button class="pill dark" type="button" id="onlineBtn">Search shop products online</button><button class="pill" type="button" id="ownBtn">Type it from the label</button></div>`);
-  box.hidden = !box.innerHTML;
+    `<div id="onl1" class="onl"></div>` +
+    (q.length < 3 ? "" : `<div class="more"><button class="pill" type="button" id="ownBtn">Can't find it? Type it from the label</button></div>`);
+  box.hidden = false;
+  onlineBlock(q, "onl1", f => { clearSearch(); amountSheet(f); });
 }
 $("q").addEventListener("input", () => { hideNotice(); showResults(); });
 $("results").addEventListener("click", e => {
@@ -930,7 +1109,7 @@ function amountSheet(food, editIndex, note) {
   const pn = food.portions ? ` · recipe makes ${fmt(food.portions, 1)} portion${food.portions === 1 ? "" : "s"}` : "";
   const facts = food.onlyM ? `${fmt(food.kcal * food.m[0][1] / 100)} kcal per ${food.m[0][0]}${pn}` : food.src === "recipe" ? `${fmt(food.kcal * food.m[0][1] / 100)} kcal per portion${pn} · 1 portion ≈ ${fmt(food.m[0][1])} g cooked` : [`${fmt(food.kcal)} kcal per 100 g`, ...(food.m || []).slice(0, 1).map(m => `1 ${m[0]} ≈ ${fmt(m[1])} g`)].join(" · ");
   openSheet(`
-    <div class="sh-head"><div><h3>${esc(food.name)}</h3><p class="num">${esc(facts)}</p>${note ? `<p>${esc(note)}</p>` : ""}</div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
+    <div class="sh-head"><div><h3>${esc(food.name)}</h3><p class="num">${esc(facts)}</p>${note ? `<p>${esc(note)}</p>` : ""}${food.p == null && food.src !== "recipe" ? `<button class="addmac" id="addMac" type="button">No macros yet · Add them</button>` : ""}</div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
     <label class="qtybig"><input id="aq" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="0" value="${editing ? esc(food.qty) : food.src === "recipe" ? "1" : ""}" aria-label="Amount"><span id="aunit"></span></label>
     <div class="chips" id="achips">${units.map(u => `<button type="button" data-u="${u}" aria-pressed="${u === unit}">${esc(chipName(food, u))}</button>`).join("")}</div>
     ${food.rid && food.onlyM ? `<div id="cookBox" class="form" hidden>
@@ -941,6 +1120,16 @@ function amountSheet(food, editIndex, note) {
     <button class="cta" id="aok" type="button">${editing ? "Save" : diaryMode ? `Add to ${mealName(addTarget.meal)}` : "Add to recipe"}</button>
     ${editing ? `<button class="ghost" id="adel" type="button">${diaryMode ? "Remove from diary" : "Remove from recipe"}</button>` : ""}`);
   const needCook = !!(food.rid && food.onlyM), baseFood = food;
+  if ($("addMac")) $("addMac").onclick = () => {
+    const tgt = addTarget, prod = myFoods.find(m => (food.code && m.code === food.code) || m.name === food.name) || { name: food.name, kcal: food.kcal, d: food.d, m: food.m, code: food.code || "" };
+    const keepQty = $("aq").value, keepUnit = unit;
+    productSheet({ edit: prod, focusMacros: true, onDone: f => {
+      addTarget = tgt;
+      const upd = { ...food, ...pick(f), name: f.name, qty: keepQty, unit: keepUnit, src: "mine" };
+      if (editing) { if (tgt.kind === "diary") { const es = entriesOf(curDay); Object.assign(es[editIndex], { p: f.p, c: f.c, f: f.f, fb: f.fb }); saveDiary(); } else { Object.assign(recipe.items[editIndex], { p: f.p, c: f.c, f: f.f, fb: f.fb }); save(); render(); } }
+      amountSheet(upd, editIndex, "Macros saved with the product.");
+    } });
+  };
   const upd = () => {
     if (needCook) {
       const cook = +$("acook").value || 0, R = recipes.find(r => r.id === baseFood.rid);
@@ -987,8 +1176,18 @@ function amountSheet(food, editIndex, note) {
 }
 
 // ---------- Sheets
-function openSheet(html) { $("sheet").innerHTML = `<div class="grab"></div>` + html; $("scrim").hidden = false; }
-function closeSheet() { $("scrim").hidden = true; $("sheet").innerHTML = ""; }
+function openSheet(html, cls) {
+  const sh = $("sheet"); sh.className = "sheet" + (cls ? " " + cls : ""); sh.scrollTop = 0;
+  sh.innerHTML = `<div class="grab"></div>` + html; $("scrim").hidden = false; document.documentElement.classList.add("locked"); syncVV();
+}
+function closeSheet() { $("scrim").hidden = true; $("sheet").innerHTML = ""; $("sheet").className = "sheet"; document.documentElement.classList.remove("locked"); }
+// Keep sheets inside the visible area when the phone keyboard is open
+function syncVV() {
+  const v = window.visualViewport; if (!v) return;
+  const r = document.documentElement.style;
+  r.setProperty("--vvh", v.height + "px"); r.setProperty("--vvtop", v.offsetTop + "px");
+}
+if (window.visualViewport) { visualViewport.addEventListener("resize", syncVV); visualViewport.addEventListener("scroll", syncVV); }
 $("scrim").addEventListener("click", e => { if (e.target === $("scrim") || e.target.closest("[data-close]")) closeSheet(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") { if (!$("scanner").hidden) stopScanner(); else if (!$("scrim").hidden) closeSheet(); } });
 
@@ -1012,6 +1211,14 @@ async function getJSON(url, ms = 12000) {
 async function lookupBarcode(code) {
   const j = await getJSON(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=${OFF_FIELDS}`);
   return j && j.status === 1 && j.product ? fromOFF(j.product, code) : null;
+}
+function fillMissingMacros(oldName, f) {
+  const hit = it => it.p == null && (it.name === oldName || it.name === f.name);
+  const set = it => { it.p = f.p; it.c = f.c; it.f = f.f; it.fb = f.fb; };
+  for (const r of recipes) for (const it of r.items) if (hit(it)) set(it);
+  for (const d of Object.values(diary)) for (const e of d.entries || []) if (hit(e)) set(e);
+  recentFoods.forEach(x => { if (hit(x)) set(x); });
+  save(); saveDiary();
 }
 function rememberProduct(f) {
   if (f.code) myFoods = myFoods.filter(m => m.code !== f.code);
@@ -1149,37 +1356,50 @@ async function handleCode(code) {
 }
 
 // ---------- Product sheet (from the label)
-function productSheet({ name = "", barcode = "", needCode = false, why = "" }) {
+function productSheet({ name = "", barcode = "", needCode = false, why = "", edit = null, focusMacros = false, onDone = null }) {
+  const E = edit || {};
+  if (edit) { name = E.name; barcode = E.code || ""; }
+  const v = x => x == null ? "" : esc(Math.round(x * 10) / 10);
   openSheet(`
-    <div class="sh-head"><div><h3>${needCode ? "Type the barcode" : barcode ? "New product" : "Add from a label"}</h3>
-      <p>${esc(why || (needCode ? "Type the numbers under the bars. If it's not found, fill in the label details." : "Copy the energy figure from the nutrition panel. It's saved to My products."))}</p></div>
+    <div class="sh-head"><div><h3>${edit ? (focusMacros ? "Add macros" : "Edit product") : needCode ? "Type the barcode" : barcode ? "New product" : "Add from a label"}</h3>
+      <p>${edit ? esc(focusMacros ? "Copy protein, carbs and fat per 100 g from the packet. They are saved with the product." : "Change any detail. Recipes and diary entries that are missing macros get them too.") : esc(why || (needCode ? "Type the numbers under the bars. If it's not found, fill in the label details." : "Copy the energy figure from the nutrition panel. It's saved to My products."))}</p></div>
       <button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
     <form class="form" id="pf">
       ${needCode ? `<label class="fld">Barcode<span class="inp"><input id="pfCode" class="code" inputmode="numeric" placeholder="e.g. 5000112637922"></span></label>
         <button class="secondary" type="button" id="pfLook">Look it up</button>` : ""}
       <label class="fld">Product name<span class="inp"><input id="pfName" value="${esc(name)}" placeholder="e.g. Greek style yogurt"></span></label>
       <div class="two">
-        <label class="fld">Energy<span class="inp"><input id="pfKcal" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="0"><span>kcal/100 g</span></span></label>
-        <label class="fld">Pack size<span class="inp"><input id="pfPiece" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="optional"><span>g</span></span></label>
+        <label class="fld">Energy<span class="inp"><input id="pfKcal" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="0" value="${v(E.kcal)}"><span>kcal/100 g</span></span></label>
+        <label class="fld">Pack size<span class="inp"><input id="pfPiece" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="optional" value="${E.m?.[0] ? v(E.m[0][1]) : ""}"><span>g</span></span></label>
       </div>
       <div class="three">
-        <label class="fld">Protein<span class="inp"><input id="pfP" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="0"><span>g</span></span></label>
-        <label class="fld">Carbs<span class="inp"><input id="pfC" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="0"><span>g</span></span></label>
-        <label class="fld">Fat<span class="inp"><input id="pfF" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="0"><span>g</span></span></label>
+        <label class="fld">Protein<span class="inp"><input id="pfP" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="0" value="${v(E.p)}"><span>g</span></span></label>
+        <label class="fld">Carbs<span class="inp"><input id="pfC" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="0" value="${v(E.c)}"><span>g</span></span></label>
+        <label class="fld">Fat<span class="inp"><input id="pfF" class="num" type="number" inputmode="decimal" min="0" step="any" placeholder="0" value="${v(E.f)}"><span>g</span></span></label>
       </div>
       <p class="prose">Per 100 g, as on the label. Macros are optional but make the totals complete.</p>
       ${needCode ? "" : `<label class="fld">Barcode<span class="inp"><input id="pfCode" class="code" inputmode="numeric" value="${esc(barcode)}" placeholder="optional"></span></label>`}
       <p class="status err" id="pfErr" hidden></p>
-      <button class="cta" type="submit">Save product</button>
+      <button class="cta" type="submit">${edit ? "Save changes" : "Save product"}</button>
     </form>`);
+  if (focusMacros) setTimeout(() => $("pfP")?.focus(), 80);
   if (needCode) { setTimeout(() => $("pfCode")?.focus(), 80); $("pfLook").onclick = () => { const c = $("pfCode").value.replace(/\D/g, ""); if (c) handleCode(c); }; }
   $("pf").addEventListener("submit", e => {
     e.preventDefault();
     const piece = +$("pfPiece").value || 0, kcal = $("pfKcal").value;
     const mp = num($("pfP").value), mc = num($("pfC").value), mf = num($("pfF").value);
     const has = mp != null || mc != null || mf != null;
-    const f = { id: uid(), name: $("pfName").value.trim(), kcal: +kcal, p: has ? mp || 0 : null, c: has ? mc || 0 : null, f: has ? mf || 0 : null, fb: null, d: 1, m: piece ? [["pack", piece]] : [], code: $("pfCode").value.replace(/\D/g, ""), src: "mine" };
+    const f = { ...E, id: E.id || uid(), name: $("pfName").value.trim(), kcal: +kcal, p: has ? mp || 0 : null, c: has ? mc || 0 : null, f: has ? mf || 0 : null, fb: has ? (E.fb ?? null) : null, d: E.d || 1, m: piece ? [[E.m?.[0]?.[0] || "pack", piece]] : [], code: $("pfCode").value.replace(/\D/g, ""), src: "mine" };
     if (!f.name || kcal === "" || !(f.kcal >= 0)) { $("pfErr").hidden = false; $("pfErr").textContent = "Add a name and the kcal per 100 g."; return; }
+    if (edit) {
+      myFoods = myFoods.filter(m => m.id !== E.id && !(f.code && m.code === f.code) && !(!E.id && m.name === E.name));
+      myFoods.unshift(f); save();
+      if (has) fillMissingMacros(E.name, f);
+      if (onDone) { onDone(f); return; }
+      closeSheet(); toast("Product saved");
+      if (tab === "products") renderProductsTab(); else if (!$("editor").hidden) render(); else if (tab === "today") renderToday();
+      return;
+    }
     rememberProduct(f); clearSearch();
     if (addTarget.kind === "none") { closeSheet(); if (tab === "products") renderProductsTab(); } else amountSheet(f);
   });
@@ -1252,6 +1472,18 @@ function openRecipe(r, isNew) {
 }
 history.replaceState({ v: "h" }, "");
 window.addEventListener("popstate", () => { if ($("editor").hidden) return; showHome(); });
+function toast(msg) {
+  document.querySelector(".toast")?.remove();
+  const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2200);
+}
+function leaveEditor() { if (history.state?.v === "r") history.back(); else showHome(); }
+$("saveRecipe").onclick = () => {
+  if (!recipe.items.length) { toast("Add at least one ingredient first"); $("q").focus(); return; }
+  if (!recipe.name.trim() || recipe.name.trim() === "New recipe") { toast("Give your recipe a name first"); $("recipeName").focus(); $("recipeName").select(); return; }
+  $("recipeName").blur(); touch(); save();
+  const n = recipe.name.trim(); leaveEditor(); toast(`Saved “${n}”`);
+};
 $("backBtn").onclick = () => { if (history.state?.v === "r") history.back(); else showHome(); };
 $("rq").addEventListener("input", e => { rq = e.target.value; renderHome(); });
 $("rsort").onclick = e => { const b = e.target.closest("[data-s]"); if (!b) return; rsort = b.dataset.s; store.set("rcc.sort", rsort); renderHome(); };
@@ -1274,6 +1506,7 @@ $("rl").onclick = e => {
 const MAINS = ["today", "home", "editor", "progress", "products"];
 let tab = "today";
 function showMain(id, tabName) {
+  if (id !== "editor" && !$("editor").hidden && recipe && !recipe.items.length && (recipe.name || "").trim() === "New recipe" && recipes.includes(recipe)) { recipes = recipes.filter(r => r !== recipe); save(); }
   if (!$("scanner").hidden) stopScanner();
   closeSheet(); clearSearch(); hideNotice();
   for (const m of MAINS) $(m).hidden = m !== id;
@@ -1384,7 +1617,7 @@ $("meals").onclick = e => {
   if (r) { const i = +r.dataset.entry, en = entriesOf(curDay)[i]; addTarget = { kind: "diary", meal: en.meal }; amountSheet(en, i); }
 };
 $("setGoalBtn").onclick = () => goalsSheet();
-$("openSettings").onclick = () => goalsSheet();
+$("openSettings").onclick = () => settingsSheet();
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   const t = keyOf(new Date());
@@ -1408,7 +1641,7 @@ function foodPicker(meal) {
         <input id="pq" type="search" placeholder="Search foods" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Search foods"></label>
       <button class="scan" id="pscan" type="button" aria-label="Scan a barcode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10.5 8v8M14 8v8M17 8v8"/></svg></button>
     </div>
-    <div id="pres"></div>`);
+    <div id="pres"></div>`, "tall");
   const draw = () => {
     const q = $("pq").value.trim();
     if (!q) {
@@ -1423,10 +1656,13 @@ function foodPicker(meal) {
     }
     pickRes = search(q);
     const tag = f => f.src === "mine" ? `<span class="tag mine">Mine</span>` : f.src === "usda" ? `<span class="tag">USDA</span>` : "";
-    $("pres").innerHTML = `<div class="results">${pickRes.map((f, i) => `<button class="r" type="button" data-pr="${i}"><span class="nm">${esc(f.name)}${tag(f)}${f.brand ? `<small>${esc(f.brand)}</small>` : ""}</span><span class="kc num">${fmt(f.kcal)} kcal</span></button>`).join("")}
-      ${q.length >= 3 ? `<div class="more">${pickRes.length ? "" : `<span class="notice" style="width:100%;padding:0 0 4px">Nothing on this phone matches.</span>`}<button class="pill dark" type="button" id="ponline">Search shop products online</button><button class="pill" type="button" id="plabel">Type it from the label</button></div>` : ""}</div>`;
+    $("pres").innerHTML = (pickRes.length ? `<div class="results">${pickRes.map((f, i) => `<button class="r" type="button" data-pr="${i}"><span class="nm">${esc(f.name)}${tag(f)}${f.brand ? `<small>${esc(f.brand)}</small>` : ""}</span><span class="kc num">${fmt(f.kcal)} kcal</span></button>`).join("")}</div>` : "") +
+      `<div id="onl2" class="onl"></div>` +
+      (q.length >= 3 ? `<div class="links"><button class="pill" type="button" id="plabel">Can't find it? Type it from the label</button></div>` : "");
+    onlineBlock(q, "onl2", f => amountSheet(f));
   };
-  $("pq").addEventListener("input", draw);
+  $("pq").addEventListener("input", () => { draw(); $("pres").scrollTop = 0; });
+  $("pq").addEventListener("focus", () => setTimeout(() => { $("sheet").scrollTop = 0; $("pres").scrollTop = 0; syncVV(); }, 50));
   $("pscan").onclick = startScanner;
   $("pres").onclick = e => {
     const r = e.target.closest("[data-pr]"), rec = e.target.closest("[data-rec]"), rc = e.target.closest("[data-recent]");
@@ -1464,7 +1700,7 @@ function goalsSheet() {
     ${profile?.age ? `<label class="toggle"><input type="checkbox" id="gauto" ${g.auto ? "checked" : ""}><span><b>Update automatically with my weight</b><small>When you log a new weight, the goal is worked out again from your details.</small></span></label>` : ""}
     <button class="cta" id="gsave" type="button">Save goals</button>
     ${goals ? `<button class="ghost" id="greset" type="button">Remove calorie goal</button>` : ""}
-    <button class="secondary" id="gbackup" type="button">Backup, sharing &amp; updates</button>`);
+    `);
   const upd = () => {
     const k = +$("gk").value || 0, pp = +$("gp").value || 0, cp = +$("gc").value || 0, fp = +$("gf").value || 0, sum = pp + cp + fp;
     const msg = $("gmsg");
@@ -1475,7 +1711,6 @@ function goalsSheet() {
   };
   ["gk", "gp", "gc", "gf"].forEach(id => $(id).addEventListener("input", upd));
   $("gcalc").onclick = calcSheet;
-  $("gbackup").onclick = menuSheet;
   if ($("greset")) $("greset").onclick = e => {
     if (!e.target.dataset.armed) { e.target.dataset.armed = 1; e.target.textContent = "Tap again to remove the goal"; return; }
     goals = null; try { localStorage.removeItem("rcc.goals"); } catch {}
@@ -1611,12 +1846,14 @@ $("wList").onclick = e => {
 // ---------- Products tab
 function renderProductsTab() {
   $("plist").innerHTML = myFoods.length ? myFoods.map((f, i) => `
-    <div class="rrow"><div class="open"><b>${esc(f.name)}</b>
-      <small class="num">${f.brand ? esc(f.brand) + " · " : ""}${fmt(f.kcal)} kcal/100 g${f.p != null ? ` · P ${g1(f.p)} C ${g1(f.c)} F ${g1(f.f)}` : ""}${f.code ? ` · <span class="code">${esc(f.code)}</span>` : ""}</small></div>
+    <div class="rrow"><button class="open" type="button" data-pedit="${i}"><b>${esc(f.name)}</b>
+      <small class="num">${f.brand ? esc(f.brand) + " · " : ""}${fmt(f.kcal)} kcal/100 g${f.p != null ? ` · P ${g1(f.p)} C ${g1(f.c)} F ${g1(f.f)}` : ` · <span class="nomac">No macros · tap to add</span>`}${f.code ? ` · <span class="code">${esc(f.code)}</span>` : ""}</small></button>
       <button class="mini" type="button" data-pdel="${i}">Delete</button></div>`).join("")
     : `<div class="emptystate"><b>No products yet</b>Products you scan or type from a label are kept here, so the next scan is instant, even offline.</div>`;
 }
 $("plist").onclick = e => {
+  const ed = e.target.closest("[data-pedit]");
+  if (ed) { addTarget = { kind: "none" }; const f = myFoods[+ed.dataset.pedit]; productSheet({ edit: f, focusMacros: f.p == null }); return; }
   const d = e.target.closest("[data-pdel]"); if (!d) return;
   if (!d.dataset.armed) { d.dataset.armed = 1; d.classList.add("armed"); d.textContent = "Confirm"; return; }
   myFoods.splice(+d.dataset.pdel, 1); save(); renderProductsTab();
@@ -1636,8 +1873,39 @@ $("logRecipe").onclick = () => {
   };
 };
 
+
+// ---------- Settings hub and appearance
+const rawGet = (k, fb) => { try { return localStorage.getItem(k) || fb; } catch { return fb; } };
+const IC = {
+  goal: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`,
+  paint: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.8 1.6-1.6 0-1.3-1.2-1.6-1.2-2.9 0-1 .8-1.6 1.8-1.6H16a5 5 0 0 0 5-5C21 6.4 17 3 12 3Z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7" r="1.2" fill="currentColor"/><circle cx="15" cy="7.5" r="1.2" fill="currentColor"/></svg>`,
+  backup: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>`
+};
+function settingsSheet() {
+  openSheet(`
+    <div class="sh-head"><div><h3>Settings</h3><p>App version ${APP_VERSION}</p></div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
+    <button class="setrow" id="sGoals" type="button"><span class="ic">${IC.goal}</span><span><b>Daily goals</b><small>${goals?.kcal ? `${fmt(goals.kcal)} kcal a day` : "Not set yet"}</small></span></button>
+    <button class="setrow" id="sLook" type="button"><span class="ic">${IC.paint}</span><span><b>Colours &amp; theme</b><small>${esc(PALETTES[rawGet("rcc.palette", "classic")]?.name || "Night & sun")} · ${{ auto: "Automatic", light: "Light", dark: "Dark" }[rawGet("rcc.theme", "auto")] || "Automatic"}</small></span></button>
+    <button class="setrow" id="sBackup" type="button"><span class="ic">${IC.backup}</span><span><b>Backup, sharing &amp; updates</b><small>Save or load your data, check for updates</small></span></button>`);
+  $("sGoals").onclick = goalsSheet; $("sLook").onclick = lookSheet; $("sBackup").onclick = menuSheet;
+}
+function lookSheet() {
+  const th = rawGet("rcc.theme", "auto"), pal = rawGet("rcc.palette", "classic");
+  const dark = th === "dark" || (th === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  openSheet(`
+    <div class="sh-head"><div><h3>Colours &amp; theme</h3><p>Changes show straight away and are saved on this phone.</p></div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
+    <h4 class="ph">Theme</h4>
+    <div class="chips" id="lTheme">${[["auto", "Automatic"], ["light", "Light"], ["dark", "Dark"]].map(([k, l]) => `<button type="button" data-v="${k}" aria-pressed="${k === th}">${l}</button>`).join("")}</div>
+    <p class="prose">Automatic follows your phone's light or dark mode.</p>
+    <h4 class="ph">Colour</h4>
+    <div class="swatches" id="lPal">${Object.entries(PALETTES).map(([k, P]) => { const c = P[dark ? "dark" : "light"]; return `<button type="button" data-v="${k}" aria-pressed="${k === pal}"><span class="sw" style="background:${c.hero}"><i style="background:${c.pop}"></i></span>${esc(P.name)}</button>`; }).join("")}</div>
+    <button class="cta" data-close type="button">Done</button>`);
+  $("lTheme").onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; try { localStorage.setItem("rcc.theme", b.dataset.v); } catch {} applyTheme(); lookSheet(); };
+  $("lPal").onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; try { localStorage.setItem("rcc.palette", b.dataset.v); } catch {} applyTheme(); [...$("lPal").children].forEach(c => c.setAttribute("aria-pressed", c === b)); };
+}
+
 // ---------- Backup, sharing, about
-$("openMenu").onclick = menuSheet;
+$("openMenu").onclick = settingsSheet;
 function menuSheet() {
   openSheet(`
     <div class="sh-head"><div><h3>Backup &amp; sharing</h3><p>${recipes.length} recipe${recipes.length === 1 ? "" : "s"} · ${myFoods.length} product${myFoods.length === 1 ? "" : "s"} saved on this phone</p></div><button class="x" data-close type="button" aria-label="Close">${ICON_X}</button></div>
